@@ -23,8 +23,24 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-app.use(cors({ origin: '*', credentials: true }));
+const allowedOrigins = [
+  'http://13.53.177.188:3000',   
+  'http://localhost:3000'
+];
 
+app.use(cors({
+  origin: function(origin, callback){
+    if (!origin) return callback(null, true); 
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(mongoSanitize());
 
