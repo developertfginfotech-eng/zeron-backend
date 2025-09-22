@@ -23,13 +23,8 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// Update CORS configuration
-app.use(cors({
-  origin: ['http://localhost:5050', 'http://127.0.0.1:5050'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(cors({ origin: '*', credentials: true }));
+
 
 app.use(mongoSanitize());
 
