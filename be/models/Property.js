@@ -1,0 +1,139 @@
+const mongoose = require('mongoose');
+
+const propertySchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true,
+    trim: true
+  },
+
+  description: {
+    type: String,
+    required: true
+  },
+
+  location: {
+    address: { type: String, required: true },
+    addressAr: { type: String, required: true },
+    city: {
+      type: String,
+      required: true,
+      enum: ['riyadh', 'jeddah', 'dammam', 'khobar', 'mecca', 'medina']
+    },
+    coordinates: {
+      latitude: Number,
+      longitude: Number
+    }
+  },
+
+  propertyType: {
+    type: String,
+    required: true,
+    enum: ['residential', 'commercial', 'retail']
+  },
+
+  seoData: {
+    slug: {
+      type: String,
+      unique: true,
+      sparse: true
+    },
+    slugAr: {
+      type: String,
+      unique: true,
+      sparse: true
+    },
+    metaTitle: String,
+    metaDescription: String
+  },
+
+  financials: {
+    totalValue: { type: Number, required: true, min: 100000 },
+    currentValue: { type: Number, required: true },
+    minInvestment: { type: Number, required: true, min: 1000 },
+    totalShares: { type: Number, required: true, min: 1 },
+    availableShares: { type: Number, required: true },
+    pricePerShare: { type: Number, required: true },
+    projectedYield: { type: Number, required: true, min: 0, max: 100 },
+    monthlyRental: { type: Number, default: 0 }
+  },
+
+  status: {
+    type: String,
+    enum: ['draft', 'active', 'fully_funded', 'completed', 'cancelled'],
+    default: 'draft'
+  },
+
+  fundingProgress: { type: Number, default: 0, min: 0, max: 100 },
+  investorCount: { type: Number, default: 0 },
+
+  features: [String],
+  featuresAr: [String],
+
+  images: [{
+    url: String,
+    alt: String,
+    isPrimary: { type: Boolean, default: false }
+  }],
+
+  timeline: {
+    launchDate: { type: Date, required: true },
+    fundingDeadline: { type: Date, required: true }
+  },
+
+  analytics: {
+    views: { type: Number, default: 0 },
+    favorites: { type: Number, default: 0 }
+  },
+
+  priceHistory: [{
+    date: { type: Date, default: Date.now },
+    price: { type: Number, required: true },
+    reason: {
+      type: String,
+      enum: ['initial', 'market_adjustment', 'valuation_update', 'admin_update']
+    },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }],
+
+  isActive: { type: Boolean, default: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
+
+
+// Text search index
+propertySchema.index({
+  title: 'text',
+  description: 'text'
+});
+
+// Virtual for funding percentage
+propertySchema.virtual('fundingPercentage').get(function () {
+  if (this.financials.totalShares === 0) return 0;
+  const soldShares = this.financials.totalShares - this.financials.availableShares;
+  return (soldShares / this.financials.totalShares) * 100;
+});
+
+// Pre-save middleware
+propertySchema.pre('save', function (next) {
+  // Update funding progress
+  if (this.financials.totalShares > 0) {
+    const soldShares = this.financials.totalShares - this.financials.availableShares;
+    this.fundingProgress = (soldShares / this.financials.totalShares) * 100;
+  }
+
+  // Ensure seoData exists
+  if (!this.seoData) this.seoData = {};
+
+  // Generate slug if not provided
+  if (!this.seoData.slug && this.title) {
+    this.seoData.slug = this.title.toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  next();
+});
+
+module.exports = mongoose.model('Property', propertySchema);
