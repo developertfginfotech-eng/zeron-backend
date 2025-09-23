@@ -24,8 +24,12 @@ const app = express();
 app.use(helmet());
 
 const allowedOrigins = [
+ 
   'http://13.53.177.188:3000',   
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://localhost:5050',
+  'http://13.53.177.188:5050'
+
 ];
 
 app.use(cors({
