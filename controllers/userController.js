@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 
 class UserController {
 
+  // Simple profile method - just basic info and KYC status
   async getProfile(req, res) {
     try {
       const user = await User.findById(req.user.id)
@@ -20,11 +21,27 @@ class UserController {
         });
       }
 
+      // Simple response with just basic info and KYC status
       res.json({
         success: true,
-        data: user
+        data: {
+          id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          fullName: `${user.firstName} ${user.lastName}`,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          status: user.status,
+          kycStatus: user.kycStatus,
+          emailVerified: user.emailVerified,
+          kycUpdated: user.kycStatus === 'approved',
+          canInvest: user.status === 'active' && user.kycStatus === 'approved' && user.emailVerified
+        }
       });
+
     } catch (error) {
+      logger.error('Get profile error:', error);
       res.status(500).json({
         success: false,
         message: 'Error fetching user profile',
@@ -33,6 +50,7 @@ class UserController {
     }
   }
 
+  // Simple update profile
   async updateProfile(req, res) {
     try {
       const errors = validationResult(req);
@@ -44,7 +62,11 @@ class UserController {
         });
       }
 
-      const allowedFields = ['firstName', 'lastName', 'phone', 'address', 'preferences'];
+      const allowedFields = [
+        'firstName', 'lastName', 'phone', 'address', 'preferences',
+        'dateOfBirth', 'nationality'
+      ];
+      
       const updateData = {};
       
       allowedFields.forEach(field => {
@@ -52,6 +74,8 @@ class UserController {
           updateData[field] = req.body[field];
         }
       });
+
+      updateData.updatedAt = new Date();
 
       const user = await User.findByIdAndUpdate(
         req.user.id,
@@ -69,9 +93,19 @@ class UserController {
       res.json({
         success: true,
         message: 'Profile updated successfully',
-        data: user
+        data: {
+          id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          fullName: `${user.firstName} ${user.lastName}`,
+          phone: user.phone,
+          status: user.status,
+          kycStatus: user.kycStatus,
+          kycUpdated: user.kycStatus === 'approved'
+        }
       });
     } catch (error) {
+      logger.error('Update profile error:', error);
       res.status(500).json({
         success: false,
         message: 'Error updating profile',
@@ -80,6 +114,37 @@ class UserController {
     }
   }
 
+  // Simple KYC status check
+  async getCurrentKycStatus(req, res) {
+    try {
+      const user = await User.findById(req.user.id).select('kycStatus');
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          kycStatus: user.kycStatus,
+          kycUpdated: user.kycStatus === 'approved'
+        }
+      });
+
+    } catch (error) {
+      logger.error('Get KYC status error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching KYC status',
+        error: error.message
+      });
+    }
+  }
+
+  // Portfolio methods remain the same
   async getCurrentUserPortfolio(req, res) {
     try {
       const userId = req.user.id;
@@ -106,7 +171,6 @@ class UserController {
 
       const { id } = req.params;
       
-      // Users can only view their own portfolio, unless they're admin
       if (req.user.id !== id && !['admin', 'super_admin'].includes(req.user.role)) {
         return res.status(403).json({
           success: false,
@@ -125,7 +189,6 @@ class UserController {
   }
 
   async getPortfolioData(userId, res) {
-    // Get user's investments
     const investments = await Investment.find({ 
       user: userId, 
       status: 'confirmed' 
@@ -133,7 +196,6 @@ class UserController {
     .populate('property', 'title titleAr location financials images status')
     .lean();
 
-    // Calculate portfolio summary
     const portfolioSummary = await Investment.getUserPortfolioSummary(userId);
     
     const summary = portfolioSummary[0] || {
@@ -143,14 +205,12 @@ class UserController {
       propertyCount: 0
     };
 
-    // Calculate additional metrics
     const totalProfitLoss = summary.totalCurrentValue - summary.totalInvestments;
     const totalReturn = summary.totalReturns + totalProfitLoss;
     const totalReturnPercentage = summary.totalInvestments > 0 
       ? (totalReturn / summary.totalInvestments) * 100 
       : 0;
 
-    // Get monthly performance (last 12 months)
     const monthlyPerformance = await Investment.aggregate([
       {
         $match: { 
@@ -174,7 +234,6 @@ class UserController {
       { $sort: { '_id.year': 1, '_id.month': 1 } }
     ]);
 
-    // Transform investments data
     const portfolioDetails = investments.map(investment => {
       const currentValue = investment.shares * investment.property.financials.pricePerShare;
       const profitLoss = currentValue - investment.amount;
@@ -260,6 +319,7 @@ class UserController {
         success: true,
         data: {
           kycStatus: user.kycStatus,
+          kycUpdated: user.kycStatus === 'approved',
           completionPercentage: kyc ? kyc.completionPercentage : 0,
           submittedAt: kyc?.submittedAt || null,
           reviewedAt: kyc?.reviewedAt || null,
