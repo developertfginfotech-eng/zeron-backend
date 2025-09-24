@@ -71,12 +71,7 @@ const propertyQueryValidation = [
     .withMessage('Invalid property type')
 ];
 
-// GET /api/properties - List properties with filters
-router.get('/', 
-  propertyQueryValidation, 
-  authenticate, 
-  propertyController.getAllProperties
-);
+
 
 // GET /api/properties/search - Search properties
 router.get('/search', 

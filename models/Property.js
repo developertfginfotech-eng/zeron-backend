@@ -13,13 +13,9 @@ const propertySchema = new mongoose.Schema({
   },
 
   location: {
-    address: { type: String, required: true },
-    addressAr: { type: String, required: true },
-    city: {
-      type: String,
-      required: true,
-      enum: ['riyadh', 'jeddah', 'dammam', 'khobar', 'mecca', 'medina']
-    },
+    address: { type: String, required: false },     // optional
+    addressAr: { type: String, required: false },   // optional
+    city: { type: String, required: false },        // optional, remove enum restriction
     coordinates: {
       latitude: Number,
       longitude: Number
@@ -33,34 +29,26 @@ const propertySchema = new mongoose.Schema({
   },
 
   seoData: {
-    slug: {
-      type: String,
-      unique: true,
-      sparse: true
-    },
-    slugAr: {
-      type: String,
-      unique: true,
-      sparse: true
-    },
+    slug: { type: String, unique: true, sparse: true },
+    slugAr: { type: String, unique: true, sparse: true },
     metaTitle: String,
     metaDescription: String
   },
 
   financials: {
-    totalValue: { type: Number, required: true, min: 100000 },
-    currentValue: { type: Number, required: true },
-    minInvestment: { type: Number, required: true, min: 1000 },
-    totalShares: { type: Number, required: true, min: 1 },
-    availableShares: { type: Number, required: true },
-    pricePerShare: { type: Number, required: true },
-    projectedYield: { type: Number, required: true, min: 0, max: 100 },
+    totalValue: { type: Number, default: 0 },
+    currentValue: { type: Number, default: 0 },
+    minInvestment: { type: Number, default: 1000 },
+    totalShares: { type: Number, default: 0 },
+    availableShares: { type: Number, default: 0 },
+    pricePerShare: { type: Number, default: 0 },
+    projectedYield: { type: Number, default: 0 },
     monthlyRental: { type: Number, default: 0 }
   },
 
   status: {
     type: String,
-    enum: ['draft', 'active', 'fully_funded', 'completed', 'cancelled'],
+    enum: ['draft', 'active', 'fully_funded', 'completed', 'cancelled', 'upcoming'],
     default: 'draft'
   },
 
@@ -77,8 +65,8 @@ const propertySchema = new mongoose.Schema({
   }],
 
   timeline: {
-    launchDate: { type: Date, required: true },
-    fundingDeadline: { type: Date, required: true }
+    launchDate: { type: Date, default: Date.now },
+    fundingDeadline: { type: Date, default: () => new Date(Date.now() + 90*24*60*60*1000) } // 90 days later
   },
 
   analytics: {
@@ -88,7 +76,7 @@ const propertySchema = new mongoose.Schema({
 
   priceHistory: [{
     date: { type: Date, default: Date.now },
-    price: { type: Number, required: true },
+    price: { type: Number, default: 0 },
     reason: {
       type: String,
       enum: ['initial', 'market_adjustment', 'valuation_update', 'admin_update']
@@ -101,7 +89,6 @@ const propertySchema = new mongoose.Schema({
   lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
-
 // Text search index
 propertySchema.index({
   title: 'text',
@@ -110,7 +97,7 @@ propertySchema.index({
 
 // Virtual for funding percentage
 propertySchema.virtual('fundingPercentage').get(function () {
-  if (this.financials.totalShares === 0) return 0;
+  if (!this.financials.totalShares) return 0;
   const soldShares = this.financials.totalShares - this.financials.availableShares;
   return (soldShares / this.financials.totalShares) * 100;
 });

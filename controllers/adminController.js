@@ -1349,114 +1349,180 @@ async createProperty(req, res) {
   }
 
   async getProperties(req, res) {
-    try {
-      const {
-        page = 1,
-        limit = 20,
-        sort = "-createdAt",
-        status,
-        propertyType,
-        search,
-        city,
-      } = req.query;
+  try {
+    console.log("=== DEBUG: getProperties called ===");
+    console.log("Query params:", req.query);
+    console.log("User:", req.user.id);
 
-      // Build filter
-      const filter = {};
-      if (status) filter.status = status;
-      if (propertyType) filter.propertyType = propertyType;
-      if (city) filter["location.city"] = city.toLowerCase();
+    const {
+      page = 1,
+      limit = 20,
+      sort = "-createdAt",
+      status, 
+      propertyType,
+      search,
+      city,
+    } = req.query;
 
-      if (search) {
-        filter.$or = [
-          { title: { $regex: search, $options: "i" } },
-          { titleAr: { $regex: search, $options: "i" } },
-          { description: { $regex: search, $options: "i" } },
-          { "location.address": { $regex: search, $options: "i" } },
-          { "location.city": { $regex: search, $options: "i" } },
-        ];
-      }
+    // Build filter
+    const filter = {};
 
-      // Pagination
-      const pageNum = parseInt(page);
-      const limitNum = parseInt(limit);
-      const skip = (pageNum - 1) * limitNum;
+    // Debug the status filtering
+    if (status) {
+      console.log("Status param provided:", status);
+      const statusArray = status.split(',').map(s => s.trim());
+      filter.status = { $in: statusArray };
+      console.log("Status filter:", filter.status);
+    } else {
+      console.log("No status param - using default filter");
+      filter.status = { $in: ['draft', 'active', 'fully_funded', 'completed', 'cancelled', 'upcoming'] };
+      console.log("Default status filter:", filter.status);
+    }
 
-      // Get properties with aggregation for additional data
-      const [properties, totalProperties] = await Promise.all([
-        Property.aggregate([
-          { $match: filter },
-          {
-            $lookup: {
-              from: "investments",
-              localField: "_id",
-              foreignField: "property",
-              as: "investments",
-            },
+    if (propertyType) {
+      console.log("PropertyType filter:", propertyType);
+      filter.propertyType = propertyType;
+    }
+    
+    if (city) {
+      console.log("City filter:", city);
+      filter["location.city"] = city.toLowerCase();
+    }
+
+    if (search) {
+      console.log("Search filter:", search);
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { titleAr: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { "location.address": { $regex: search, $options: "i" } },
+        { "location.city": { $regex: search, $options: "i" } },
+      ];
+    }
+
+    console.log("Final filter:", JSON.stringify(filter, null, 2));
+
+    // Test the filter first
+    const totalInDB = await Property.countDocuments();
+    const matchingFilter = await Property.countDocuments(filter);
+    
+    console.log(`Total properties in DB: ${totalInDB}`);
+    console.log(`Properties matching filter: ${matchingFilter}`);
+
+    // Get sample documents to see what we're working with
+    const sampleDocs = await Property.find({}, { title: 1, status: 1, propertyType: 1 }).limit(5);
+    console.log("Sample documents:", sampleDocs);
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    console.log(`Pagination: page=${pageNum}, limit=${limitNum}, skip=${skip}`);
+
+    // Try simple find first instead of aggregation
+    const simpleProperties = await Property.find(filter)
+      .sort(sort.startsWith("-") ? { [sort.substring(1)]: -1 } : { [sort]: 1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
+
+    console.log(`Simple find returned: ${simpleProperties.length} properties`);
+    console.log("Property titles:", simpleProperties.map(p => p.title));
+
+    // Now try the aggregation
+    const [properties, totalProperties] = await Promise.all([
+      Property.aggregate([
+        { $match: filter },
+        {
+          $lookup: {
+            from: "investments",
+            localField: "_id",
+            foreignField: "property",
+            as: "investments",
           },
-          {
-            $addFields: {
-              investorCount: { $size: "$investments" },
-              totalInvested: { $sum: "$investments.amount" },
-              fundingProgress: {
-                $cond: {
-                  if: { $gt: ["$financials.totalValue", 0] },
-                  then: {
-                    $multiply: [
-                      {
-                        $divide: [
-                          { $sum: "$investments.amount" },
-                          "$financials.totalValue",
-                        ],
-                      },
-                      100,
-                    ],
-                  },
-                  else: 0,
+        },
+        {
+          $addFields: {
+            investorCount: { $size: "$investments" },
+            totalInvested: { $ifNull: [{ $sum: "$investments.amount" }, 0] },
+            fundingProgress: {
+              $cond: {
+                if: { $gt: ["$financials.totalValue", 0] },
+                then: {
+                  $multiply: [
+                    { 
+                      $divide: [
+                        { $ifNull: [{ $sum: "$investments.amount" }, 0] }, 
+                        "$financials.totalValue"
+                      ] 
+                    },
+                    100
+                  ]
                 },
+                else: { $ifNull: ["$fundingProgress", 0] }
               },
             },
           },
-          {
-            $sort: {
-              [sort.startsWith("-") ? sort.substring(1) : sort]:
-                sort.startsWith("-") ? -1 : 1,
-            },
-          },
-          { $skip: skip },
-          { $limit: limitNum },
-        ]),
-        Property.countDocuments(filter),
-      ]);
-
-      const totalPages = Math.ceil(totalProperties / limitNum);
-
-      logger.info(
-        `Admin fetched properties list - Admin: ${req.user.id}, Page: ${page}`
-      );
-
-      res.json({
-        success: true,
-        data: {
-          properties,
-          pagination: {
-            page: pageNum,
-            pages: totalPages,
-            total: totalProperties,
-            limit: limitNum,
-            hasNext: pageNum < totalPages,
-            hasPrev: pageNum > 1,
+        },
+        {
+          $sort: {
+            [sort.startsWith("-") ? sort.substring(1) : sort]:
+              sort.startsWith("-") ? -1 : 1,
           },
         },
-      });
-    } catch (error) {
-      logger.error("Get properties error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error fetching properties",
-        error: error.message,
-      });
-    }
+        { $skip: skip },
+        { $limit: limitNum },
+      ]),
+      Property.countDocuments(filter),
+    ]);
+
+    console.log(`Aggregation returned: ${properties.length} properties`);
+    console.log("Aggregation titles:", properties.map(p => p.title));
+
+    const totalPages = Math.ceil(totalProperties / limitNum);
+
+    logger.info(
+      `Admin fetched properties list - Admin: ${req.user.id}, Page: ${pageNum}, Found: ${properties.length}/${totalProperties}`
+    );
+
+    const response = {
+      success: true,
+      data: {
+        properties,
+        pagination: {
+          page: pageNum,
+          pages: totalPages,
+          total: totalProperties,
+          limit: limitNum,
+          hasNext: pageNum < totalPages,
+          hasPrev: pageNum > 1,
+        },
+        debug: {
+          totalInDB,
+          matchingFilter,
+          filterUsed: filter,
+          simpleQueryCount: simpleProperties.length,
+          aggregationCount: properties.length
+        }
+      },
+    };
+
+    console.log("Response pagination:", response.data.pagination);
+    console.log("=== DEBUG: Response ready ===");
+
+    res.json(response);
+  } catch (error) {
+    console.error("Get properties error:", error);
+    logger.error("Get properties error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching properties",
+      error: error.message,
+    });
   }
+}
+
 
   async getPropertyById(req, res) {
     try {
