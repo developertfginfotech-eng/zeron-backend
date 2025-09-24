@@ -21,6 +21,11 @@ const upload = multer({
 
 // Apply authentication to all routes
 router.use(authenticate);
+// Get all properties
+router.get('/properties', adminController.getProperties);
+
+// Get specific property
+router.get('/properties/:id', adminController.getPropertyById);
 
 // Base authorization for admin routes (all admin roles can access unless specified)
 router.use(authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'));
@@ -80,11 +85,7 @@ router.put('/users/:id/kyc-status', authorize('super_admin', 'kyc_officer'), [
 
 // ========== PROPERTY MANAGEMENT ROUTES ==========
 
-// Get all properties
-router.get('/properties', adminController.getProperties);
 
-// Get specific property
-router.get('/properties/:id', adminController.getPropertyById);
 
 // Create new property (super admin and property managers, requires OTP)
 router.post('/properties', authorize('super_admin', 'property_manager'), upload.array('images', 10), adminController.createProperty);
