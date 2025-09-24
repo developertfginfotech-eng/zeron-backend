@@ -11,8 +11,8 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const kycRoutes = require('./routes/kyc');
 const userRoutes = require('./routes/users');
-const adminRoutes = require('./routes/admin'); 
-const propertyRoutes = require('./routes/properties'); 
+const adminRoutes = require('./routes/admin');
+const propertyRoutes = require('./routes/properties');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -23,26 +23,9 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-const allowedOrigins = [
- 
-  'http://13.53.177.188:3000',   
-  'http://localhost:3000',
-  'http://localhost:5050',
-  'http://13.53.177.188:5050',
-  'https://localhost:5000',
-  'http://127.0.0.1:5000'
-
-];
-
+// CORS - Allow all origins
 app.use(cors({
-  origin: function(origin, callback){
-    if (!origin) return callback(null, true); 
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -57,7 +40,6 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static('uploads'));
 
-
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100 // limit each IP to 100 requests per windowMs
@@ -69,8 +51,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // This handles form-data
 
 // Logging
-app.use(morgan('combined', { 
-  stream: { write: message => logger.info(message.trim()) } 
+app.use(morgan('combined', {
+  stream: { write: message => logger.info(message.trim()) }
 }));
 
 // Health check
@@ -87,7 +69,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/properties', propertyRoutes); 
+app.use('/api/properties', propertyRoutes);
 
 // Error handling
 app.use('*', (req, res) => {
@@ -121,9 +103,9 @@ async function createDefaultAdmin() {
     
     if (!adminExists) {
       const admin = new User({
-        email: process.env.ADMIN_EMAIL ,
+        email: process.env.ADMIN_EMAIL,
         phone: '+966500000000',
-        password: process.env.ADMIN_PASSWORD ,
+        password: process.env.ADMIN_PASSWORD,
         firstName: 'Super',
         lastName: 'Admin',
         role: 'super_admin',
