@@ -91,6 +91,46 @@ class KYCController {
       next(error);
     }
   }
+
+ async getKYCData(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const kyc = await KYC.findOne({ user: userId }).lean();
+
+      if (!kyc) {
+        return res.status(404).json({ success: false, message: 'KYC data not found' });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: kyc
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+async getAllKYCData(req, res, next) {
+  try {
+    const allKYC = await KYC.find()
+      .populate('user', 'email fullNameArabic fullNameEnglish kycStatus occupation')
+      .lean();
+
+    const totalApplicants = allKYC.length;
+    const approved = allKYC.filter(k => k.status === 'approved').length;
+    const pending = allKYC.filter(k => k.status === 'pending' || k.status === 'under_review').length;
+    const rejected = allKYC.filter(k => k.status === 'rejected').length;
+
+    res.status(200).json({
+      success: true,
+      data: allKYC,
+      stats: { totalApplicants, approved, pending, rejected }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 }
 
 module.exports = new KYCController();
