@@ -10,6 +10,7 @@ const otpEmailService = require("../utils/otpEmailService");
 const fs = require("fs");
 
 class AdminController {
+ 
   async getAllUsers(req, res) {
     try {
       const {
@@ -107,141 +108,136 @@ class AdminController {
     }
   }
   async getAllRegularUsers(req, res) {
-    try {
-      const {
-        page = 1,
-        limit = 20,
-        sort = "-createdAt",
-        status,
-        kycStatus,
-        search,
-        emailVerified,
-      } = req.query;
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      sort = "-createdAt",
+      status,
+      kycStatus,
+      search,
+      emailVerified
+    } = req.query;
 
-      // Filter for regular users only (exclude admin roles)
-      const filter = {
-        role: "user", // Only get regular users, not admins
-      };
+    // Filter for regular users only (exclude admin roles)
+    const filter = {
+      role: 'user' // Only get regular users, not admins
+    };
 
-      // Add optional filters
-      if (status) filter.status = status;
-      if (kycStatus) filter.kycStatus = kycStatus;
-      if (emailVerified !== undefined)
-        filter.emailVerified = emailVerified === "true";
+    // Add optional filters
+    if (status) filter.status = status;
+    if (kycStatus) filter.kycStatus = kycStatus;
+    if (emailVerified !== undefined) filter.emailVerified = emailVerified === 'true';
 
-      // Search functionality
-      if (search) {
-        filter.$or = [
-          { firstName: { $regex: search, $options: "i" } },
-          { lastName: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { phone: { $regex: search, $options: "i" } },
-        ];
-      }
-
-      // Pagination
-      const pageNum = parseInt(page);
-      const limitNum = parseInt(limit);
-      const skip = (pageNum - 1) * limitNum;
-
-      // Get users and statistics
-      const [users, totalUsers, stats] = await Promise.all([
-        User.find(filter)
-          .select("-password") // Exclude password field
-          .sort(sort)
-          .skip(skip)
-          .limit(limitNum)
-          .lean(),
-        User.countDocuments(filter),
-        User.aggregate([
-          { $match: { role: "user" } }, // Only regular users for stats
-          {
-            $group: {
-              _id: null,
-              totalUsers: { $sum: 1 },
-              activeUsers: {
-                $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] },
-              },
-              pendingUsers: {
-                $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] },
-              },
-              inactiveUsers: {
-                $sum: { $cond: [{ $eq: ["$status", "inactive"] }, 1, 0] },
-              },
-              pendingKyc: {
-                $sum: { $cond: [{ $eq: ["$kycStatus", "pending"] }, 1, 0] },
-              },
-              approvedKyc: {
-                $sum: { $cond: [{ $eq: ["$kycStatus", "approved"] }, 1, 0] },
-              },
-              rejectedKyc: {
-                $sum: { $cond: [{ $eq: ["$kycStatus", "rejected"] }, 1, 0] },
-              },
-              verifiedEmails: {
-                $sum: { $cond: [{ $eq: ["$emailVerified", true] }, 1, 0] },
-              },
-            },
-          },
-        ]),
-      ]);
-
-      const totalPages = Math.ceil(totalUsers / limitNum);
-
-      // Log the request
-      logger.info(
-        `Admin fetched regular users list - Admin: ${req.user.id}, Page: ${page}, Total: ${totalUsers}`
-      );
-
-      res.json({
-        success: true,
-        data: {
-          users: users.map((user) => ({
-            ...user,
-            fullName: `${user.firstName} ${user.lastName}`,
-            // Add computed fields
-            accountAge: Math.floor(
-              (new Date() - new Date(user.createdAt)) / (1000 * 60 * 60 * 24)
-            ), // days
-            isEligibleForPromotion:
-              user.status === "active" &&
-              user.kycStatus === "approved" &&
-              user.emailVerified,
-          })),
-          pagination: {
-            page: pageNum,
-            pages: totalPages,
-            total: totalUsers,
-            limit: limitNum,
-            hasNext: pageNum < totalPages,
-            hasPrev: pageNum > 1,
-          },
-          statistics: stats[0] || {
-            totalUsers: 0,
-            activeUsers: 0,
-            pendingUsers: 0,
-            inactiveUsers: 0,
-            pendingKyc: 0,
-            approvedKyc: 0,
-            rejectedKyc: 0,
-            verifiedEmails: 0,
-          },
-          filters: {
-            status,
-            kycStatus,
-            search,
-            emailVerified,
-          },
-        },
-      });
-    } catch (error) {
-      logger.error("Get all regular users error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error fetching users",
-        error: error.message,
-      });
+    // Search functionality
+    if (search) {
+      filter.$or = [
+        { firstName: { $regex: search, $options: "i" } },
+        { lastName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } }
+      ];
     }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Get users and statistics
+    const [users, totalUsers, stats] = await Promise.all([
+      User.find(filter)
+        .select("-password") // Exclude password field
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      User.countDocuments(filter),
+      User.aggregate([
+        { $match: { role: 'user' } }, // Only regular users for stats
+        {
+          $group: {
+            _id: null,
+            totalUsers: { $sum: 1 },
+            activeUsers: {
+              $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] }
+            },
+            pendingUsers: {
+              $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] }
+            },
+            inactiveUsers: {
+              $sum: { $cond: [{ $eq: ["$status", "inactive"] }, 1, 0] }
+            },
+            pendingKyc: {
+              $sum: { $cond: [{ $eq: ["$kycStatus", "pending"] }, 1, 0] }
+            },
+            approvedKyc: {
+              $sum: { $cond: [{ $eq: ["$kycStatus", "approved"] }, 1, 0] }
+            },
+            rejectedKyc: {
+              $sum: { $cond: [{ $eq: ["$kycStatus", "rejected"] }, 1, 0] }
+            },
+            verifiedEmails: {
+              $sum: { $cond: [{ $eq: ["$emailVerified", true] }, 1, 0] }
+            }
+          }
+        }
+      ])
+    ]);
+
+    const totalPages = Math.ceil(totalUsers / limitNum);
+
+    // Log the request
+    logger.info(
+      `Admin fetched regular users list - Admin: ${req.user.id}, Page: ${page}, Total: ${totalUsers}`
+    );
+
+    res.json({
+      success: true,
+      data: {
+        users: users.map(user => ({
+          ...user,
+          fullName: `${user.firstName} ${user.lastName}`,
+          // Add computed fields
+          accountAge: Math.floor((new Date() - new Date(user.createdAt)) / (1000 * 60 * 60 * 24)), // days
+          isEligibleForPromotion: user.status === 'active' && user.kycStatus === 'approved' && user.emailVerified
+        })),
+        pagination: {
+          page: pageNum,
+          pages: totalPages,
+          total: totalUsers,
+          limit: limitNum,
+          hasNext: pageNum < totalPages,
+          hasPrev: pageNum > 1
+        },
+        statistics: stats[0] || {
+          totalUsers: 0,
+          activeUsers: 0,
+          pendingUsers: 0,
+          inactiveUsers: 0,
+          pendingKyc: 0,
+          approvedKyc: 0,
+          rejectedKyc: 0,
+          verifiedEmails: 0
+        },
+        filters: {
+          status,
+          kycStatus,
+          search,
+          emailVerified
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error("Get all regular users error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching users",
+      error: error.message
+    });
   }
+}
   async updateKycStatus(req, res) {
     try {
       const errors = validationResult(req);
@@ -311,25 +307,10 @@ class AdminController {
 
   async getAdminUsers(req, res) {
     try {
-      const {
-        page = 1,
-        limit = 20,
-        sort = "-createdAt",
-        role,
-        search,
-      } = req.query;
+      const { page = 1, limit = 20, sort = "-createdAt", role, search } = req.query;
 
       const filter = {
-        role: {
-          $in: [
-            "admin",
-            "super_admin",
-            "kyc_officer",
-            "property_manager",
-            "financial_analyst",
-            "compliance_officer",
-          ],
-        },
+        role: { $in: ["admin", "super_admin", "kyc_officer", "property_manager", "financial_analyst", "compliance_officer"] }
       };
 
       if (role) filter.role = role;
@@ -337,7 +318,7 @@ class AdminController {
         filter.$or = [
           { firstName: { $regex: search, $options: "i" } },
           { lastName: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } }
         ];
       }
 
@@ -346,35 +327,25 @@ class AdminController {
       const skip = (pageNum - 1) * limitNum;
 
       const [adminUsers, totalAdmins] = await Promise.all([
-        User.find(filter)
-          .select("-password")
-          .sort(sort)
-          .skip(skip)
-          .limit(limitNum)
-          .lean(),
-        User.countDocuments(filter),
+        User.find(filter).select("-password").sort(sort).skip(skip).limit(limitNum).lean(),
+        User.countDocuments(filter)
       ]);
 
       res.json({
         success: true,
         data: {
-          admins: adminUsers.map((user) => ({
-            ...user,
-            fullName: `${user.firstName} ${user.lastName}`,
-          })),
+          admins: adminUsers.map(user => ({ ...user, fullName: `${user.firstName} ${user.lastName}` })),
           pagination: {
             page: pageNum,
             pages: Math.ceil(totalAdmins / limitNum),
             total: totalAdmins,
-            limit: limitNum,
-          },
-        },
+            limit: limitNum
+          }
+        }
       });
     } catch (error) {
       logger.error("Get admin users error:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Error fetching admin users" });
+      res.status(500).json({ success: false, message: "Error fetching admin users" });
     }
   }
 
@@ -383,40 +354,28 @@ class AdminController {
     try {
       const { id } = req.params;
 
-      if (req.user.role !== "super_admin") {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only super administrators can view admin details",
-          });
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({ success: false, message: "Only super administrators can view admin details" });
       }
 
       const adminUser = await User.findById(id)
-        .select("-password")
-        .populate("createdBy", "firstName lastName email")
-        .populate("updatedBy", "firstName lastName email")
-        .populate("deactivatedBy", "firstName lastName email")
+        .select('-password')
+        .populate('createdBy', 'firstName lastName email')
+        .populate('updatedBy', 'firstName lastName email')
+        .populate('deactivatedBy', 'firstName lastName email')
         .lean();
 
       if (!adminUser) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Admin user not found" });
+        return res.status(404).json({ success: false, message: "Admin user not found" });
       }
 
       res.json({
         success: true,
-        data: {
-          ...adminUser,
-          fullName: `${adminUser.firstName} ${adminUser.lastName}`,
-        },
+        data: { ...adminUser, fullName: `${adminUser.firstName} ${adminUser.lastName}` }
       });
     } catch (error) {
       logger.error("Get admin details error:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Error fetching admin details" });
+      res.status(500).json({ success: false, message: "Error fetching admin details" });
     }
   }
 
@@ -427,29 +386,17 @@ class AdminController {
       const { firstName, lastName, email, status, otp } = req.body;
       const currentUserId = req.user.id;
 
-      if (req.user.role !== "super_admin") {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only super administrators can update admin details",
-          });
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({ success: false, message: "Only super administrators can update admin details" });
       }
 
       if (id === currentUserId) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Cannot modify your own account details",
-          });
+        return res.status(400).json({ success: false, message: "Cannot modify your own account details" });
       }
 
       const targetAdmin = await User.findById(id);
       if (!targetAdmin) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Admin user not found" });
+        return res.status(404).json({ success: false, message: "Admin user not found" });
       }
 
       if (!otp) {
@@ -458,10 +405,10 @@ class AdminController {
           operation: "update_admin_details",
           propertyData: {
             title: `Update Admin Details - ${targetAdmin.firstName} ${targetAdmin.lastName}`,
-            propertyType: "admin_update",
+            propertyType: "admin_update"
           },
           adminUser: currentUser,
-          propertyId: id,
+          propertyId: id
         });
 
         return res.status(200).json({
@@ -471,21 +418,17 @@ class AdminController {
             step: "otp_required",
             message: "Check your email for OTP code",
             sentTo: emailResult.sentTo,
-            otpId: emailResult.otpId,
-          },
+            otpId: emailResult.otpId
+          }
         });
       }
 
-      const verification = await otpEmailService.verifyOTP(
-        currentUserId,
-        otp,
-        "update_admin_details"
-      );
+      const verification = await otpEmailService.verifyOTP(currentUserId, otp, "update_admin_details");
       if (!verification.valid) {
         return res.status(400).json({
           success: false,
           message: verification.reason,
-          attemptsRemaining: verification.attemptsRemaining,
+          attemptsRemaining: verification.attemptsRemaining
         });
       }
 
@@ -508,15 +451,13 @@ class AdminController {
             lastName: targetAdmin.lastName,
             email: targetAdmin.email,
             role: targetAdmin.role,
-            status: targetAdmin.status,
-          },
-        },
+            status: targetAdmin.status
+          }
+        }
       });
     } catch (error) {
       logger.error("Update admin details error:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Error updating admin details" });
+      res.status(500).json({ success: false, message: "Error updating admin details" });
     }
   }
 
@@ -527,29 +468,17 @@ class AdminController {
       const { reason, otp } = req.body;
       const currentUserId = req.user.id;
 
-      if (req.user.role !== "super_admin") {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only super administrators can deactivate admins",
-          });
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({ success: false, message: "Only super administrators can deactivate admins" });
       }
 
       if (id === currentUserId) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Cannot deactivate your own account",
-          });
+        return res.status(400).json({ success: false, message: "Cannot deactivate your own account" });
       }
 
       const targetAdmin = await User.findById(id);
       if (!targetAdmin) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Admin user not found" });
+        return res.status(404).json({ success: false, message: "Admin user not found" });
       }
 
       if (!otp) {
@@ -558,53 +487,43 @@ class AdminController {
           operation: "deactivate_admin",
           propertyData: {
             title: `Deactivate Admin - ${targetAdmin.firstName} ${targetAdmin.lastName}`,
-            propertyType: "admin_deactivation",
+            propertyType: "admin_deactivation"
           },
           adminUser: currentUser,
-          propertyId: id,
+          propertyId: id
         });
 
         return res.status(200).json({
           success: true,
           message: "OTP sent successfully",
-          data: {
-            step: "otp_required",
-            sentTo: emailResult.sentTo,
-            otpId: emailResult.otpId,
-          },
+          data: { step: "otp_required", sentTo: emailResult.sentTo, otpId: emailResult.otpId }
         });
       }
 
-      const verification = await otpEmailService.verifyOTP(
-        currentUserId,
-        otp,
-        "deactivate_admin"
-      );
+      const verification = await otpEmailService.verifyOTP(currentUserId, otp, "deactivate_admin");
       if (!verification.valid) {
         return res.status(400).json({
           success: false,
           message: verification.reason,
-          attemptsRemaining: verification.attemptsRemaining,
+          attemptsRemaining: verification.attemptsRemaining
         });
       }
 
-      targetAdmin.status = "inactive";
+      targetAdmin.status = 'inactive';
       targetAdmin.deactivatedAt = new Date();
       targetAdmin.deactivatedBy = currentUserId;
-      targetAdmin.deactivationReason = reason || "Deactivated by super admin";
+      targetAdmin.deactivationReason = reason || 'Deactivated by super admin';
 
       await targetAdmin.save();
 
       res.json({
         success: true,
         message: "Admin user deactivated successfully",
-        data: { user: { id: targetAdmin._id, status: targetAdmin.status } },
+        data: { user: { id: targetAdmin._id, status: targetAdmin.status } }
       });
     } catch (error) {
       logger.error("Deactivate admin error:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Error deactivating admin" });
+      res.status(500).json({ success: false, message: "Error deactivating admin" });
     }
   }
 
@@ -614,23 +533,16 @@ class AdminController {
       const { id } = req.params;
       const currentUserId = req.user.id;
 
-      if (req.user.role !== "super_admin") {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only super administrators can reactivate admins",
-          });
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({ success: false, message: "Only super administrators can reactivate admins" });
       }
 
       const targetAdmin = await User.findById(id);
       if (!targetAdmin) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Admin user not found" });
+        return res.status(404).json({ success: false, message: "Admin user not found" });
       }
 
-      targetAdmin.status = "active";
+      targetAdmin.status = 'active';
       targetAdmin.reactivatedAt = new Date();
       targetAdmin.reactivatedBy = currentUserId;
 
@@ -639,13 +551,11 @@ class AdminController {
       res.json({
         success: true,
         message: "Admin user reactivated successfully",
-        data: { user: { id: targetAdmin._id, status: targetAdmin.status } },
+        data: { user: { id: targetAdmin._id, status: targetAdmin.status } }
       });
     } catch (error) {
       logger.error("Reactivate admin error:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Error reactivating admin" });
+      res.status(500).json({ success: false, message: "Error reactivating admin" });
     }
   }
 
@@ -657,53 +567,36 @@ class AdminController {
       const currentUserId = req.user.id;
 
       if (req.user.role !== "super_admin") {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only super administrators can promote users",
-          });
+        return res.status(403).json({ success: false, message: "Only super administrators can promote users" });
       }
 
       const targetUser = await User.findById(id);
       if (!targetUser) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
+        return res.status(404).json({ success: false, message: "User not found" });
       }
 
       if (!otp) {
         const currentUser = await User.findById(currentUserId);
         const emailResult = await otpEmailService.sendOTP({
           operation: "promote_super_admin",
-          propertyData: {
-            title: `Promote ${targetUser.firstName} ${targetUser.lastName} to Super Admin`,
-          },
+          propertyData: { title: `Promote ${targetUser.firstName} ${targetUser.lastName} to Super Admin` },
           adminUser: currentUser,
-          propertyId: id,
+          propertyId: id
         });
 
         return res.status(200).json({
           success: true,
           message: "OTP sent successfully",
-          data: {
-            step: "otp_required",
-            sentTo: emailResult.sentTo,
-            otpId: emailResult.otpId,
-          },
+          data: { step: "otp_required", sentTo: emailResult.sentTo, otpId: emailResult.otpId }
         });
       }
 
-      const verification = await otpEmailService.verifyOTP(
-        currentUserId,
-        otp,
-        "promote_super_admin"
-      );
+      const verification = await otpEmailService.verifyOTP(currentUserId, otp, "promote_super_admin");
       if (!verification.valid) {
         return res.status(400).json({
           success: false,
           message: verification.reason,
-          attemptsRemaining: verification.attemptsRemaining,
+          attemptsRemaining: verification.attemptsRemaining
         });
       }
 
@@ -713,7 +606,7 @@ class AdminController {
       res.json({
         success: true,
         message: "User promoted to Super Administrator successfully",
-        data: { user: { id: targetUser._id, role: targetUser.role } },
+        data: { user: { id: targetUser._id, role: targetUser.role } }
       });
     } catch (error) {
       logger.error("Promote to super admin error:", error);
@@ -729,67 +622,41 @@ class AdminController {
       const currentUserId = req.user.id;
 
       if (req.user.role !== "super_admin") {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only super administrators can change roles",
-          });
+        return res.status(403).json({ success: false, message: "Only super administrators can change roles" });
       }
 
-      const validRoles = [
-        "admin",
-        "super_admin",
-        "kyc_officer",
-        "property_manager",
-        "financial_analyst",
-        "compliance_officer",
-      ];
+      const validRoles = ["admin", "super_admin", "kyc_officer", "property_manager", "financial_analyst", "compliance_officer"];
       if (!validRoles.includes(role)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid role specified" });
+        return res.status(400).json({ success: false, message: "Invalid role specified" });
       }
 
       const targetUser = await User.findById(id);
       if (!targetUser) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
+        return res.status(404).json({ success: false, message: "User not found" });
       }
 
       if (!otp) {
         const currentUser = await User.findById(currentUserId);
         const emailResult = await otpEmailService.sendOTP({
           operation: "update_role",
-          propertyData: {
-            title: `Change ${targetUser.firstName} ${targetUser.lastName} role to ${role}`,
-          },
+          propertyData: { title: `Change ${targetUser.firstName} ${targetUser.lastName} role to ${role}` },
           adminUser: currentUser,
-          propertyId: id,
+          propertyId: id
         });
 
         return res.status(200).json({
           success: true,
           message: "OTP sent successfully",
-          data: {
-            step: "otp_required",
-            sentTo: emailResult.sentTo,
-            otpId: emailResult.otpId,
-          },
+          data: { step: "otp_required", sentTo: emailResult.sentTo, otpId: emailResult.otpId }
         });
       }
 
-      const verification = await otpEmailService.verifyOTP(
-        currentUserId,
-        otp,
-        "update_role"
-      );
+      const verification = await otpEmailService.verifyOTP(currentUserId, otp, "update_role");
       if (!verification.valid) {
         return res.status(400).json({
           success: false,
           message: verification.reason,
-          attemptsRemaining: verification.attemptsRemaining,
+          attemptsRemaining: verification.attemptsRemaining
         });
       }
 
@@ -799,7 +666,7 @@ class AdminController {
       res.json({
         success: true,
         message: `User role updated to ${role} successfully`,
-        data: { user: { id: targetUser._id, role: targetUser.role } },
+        data: { user: { id: targetUser._id, role: targetUser.role } }
       });
     } catch (error) {
       logger.error("Update admin role error:", error);
@@ -812,17 +679,12 @@ class AdminController {
     try {
       const { page = 1, limit = 20, search } = req.query;
 
-      const filter = {
-        role: "user",
-        status: "active",
-        kycStatus: "approved",
-        emailVerified: true,
-      };
+      const filter = { role: 'user', status: 'active', kycStatus: 'approved', emailVerified: true };
       if (search) {
         filter.$or = [
           { firstName: { $regex: search, $options: "i" } },
           { lastName: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } }
         ];
       }
 
@@ -831,34 +693,20 @@ class AdminController {
       const skip = (pageNum - 1) * limitNum;
 
       const [users, totalUsers] = await Promise.all([
-        User.find(filter)
-          .select("-password")
-          .sort("-createdAt")
-          .skip(skip)
-          .limit(limitNum)
-          .lean(),
-        User.countDocuments(filter),
+        User.find(filter).select('-password').sort('-createdAt').skip(skip).limit(limitNum).lean(),
+        User.countDocuments(filter)
       ]);
 
       res.json({
         success: true,
         data: {
-          users: users.map((user) => ({
-            ...user,
-            fullName: `${user.firstName} ${user.lastName}`,
-          })),
-          pagination: {
-            page: pageNum,
-            pages: Math.ceil(totalUsers / limitNum),
-            total: totalUsers,
-          },
-        },
+          users: users.map(user => ({ ...user, fullName: `${user.firstName} ${user.lastName}` })),
+          pagination: { page: pageNum, pages: Math.ceil(totalUsers / limitNum), total: totalUsers }
+        }
       });
     } catch (error) {
       logger.error("Get eligible users error:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Error fetching eligible users" });
+      res.status(500).json({ success: false, message: "Error fetching eligible users" });
     }
   }
 
@@ -869,78 +717,45 @@ class AdminController {
       const currentUserId = req.user.id;
 
       if (req.user.role !== "super_admin") {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Only super administrators can promote users",
-          });
+        return res.status(403).json({ success: false, message: "Only super administrators can promote users" });
       }
 
-      const validRoles = [
-        "admin",
-        "kyc_officer",
-        "property_manager",
-        "financial_analyst",
-        "compliance_officer",
-      ];
+      const validRoles = ["admin", "kyc_officer", "property_manager", "financial_analyst", "compliance_officer"];
       if (!validRoles.includes(role)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid admin role specified" });
+        return res.status(400).json({ success: false, message: "Invalid admin role specified" });
       }
 
       const targetUser = await User.findById(userId);
       if (!targetUser) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
+        return res.status(404).json({ success: false, message: "User not found" });
       }
 
-      if (
-        targetUser.status !== "active" ||
-        targetUser.kycStatus !== "approved"
-      ) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "User must be active with approved KYC",
-          });
+      if (targetUser.status !== "active" || targetUser.kycStatus !== "approved") {
+        return res.status(400).json({ success: false, message: "User must be active with approved KYC" });
       }
 
       if (!otp) {
         const currentUser = await User.findById(currentUserId);
         const emailResult = await otpEmailService.sendOTP({
           operation: "promote_to_admin",
-          propertyData: {
-            title: `Promote ${targetUser.firstName} ${targetUser.lastName} to ${role}`,
-          },
+          propertyData: { title: `Promote ${targetUser.firstName} ${targetUser.lastName} to ${role}` },
           adminUser: currentUser,
-          propertyId: userId,
+          propertyId: userId
         });
 
         return res.status(200).json({
           success: true,
           message: "OTP sent successfully",
-          data: {
-            step: "otp_required",
-            sentTo: emailResult.sentTo,
-            otpId: emailResult.otpId,
-          },
+          data: { step: "otp_required", sentTo: emailResult.sentTo, otpId: emailResult.otpId }
         });
       }
 
-      const verification = await otpEmailService.verifyOTP(
-        currentUserId,
-        otp,
-        "promote_to_admin"
-      );
+      const verification = await otpEmailService.verifyOTP(currentUserId, otp, "promote_to_admin");
       if (!verification.valid) {
         return res.status(400).json({
           success: false,
           message: verification.reason,
-          attemptsRemaining: verification.attemptsRemaining,
+          attemptsRemaining: verification.attemptsRemaining
         });
       }
 
@@ -952,7 +767,7 @@ class AdminController {
       res.json({
         success: true,
         message: `User promoted to ${role} successfully`,
-        data: { user: { id: targetUser._id, role: targetUser.role } },
+        data: { user: { id: targetUser._id, role: targetUser.role } }
       });
     } catch (error) {
       logger.error("Promote user to admin error:", error);
@@ -960,205 +775,194 @@ class AdminController {
     }
   }
 
-  async createProperty(req, res) {
-    try {
-      console.log("=== CREATE PROPERTY - ADMIN CONTROL ===");
-      console.log("Request body:", req.body);
 
-      const userId = req.user.id;
-      const user = await User.findById(userId);
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: "User not found. Please log in again.",
-        });
-      }
+async createProperty(req, res) {
+  try {
+    console.log("=== CREATE PROPERTY - ADMIN CONTROL ===");
+    console.log("Request body:", req.body);
 
-      const {
-        title,
-        description,
-        location,
-        propertyType,
-        financials,
-        status,
-        otp,
-      } = req.body;
-
-      // Parse JSON fields
-      let parsedLocation = {};
-      let parsedFinancials = {};
-
-      try {
-        parsedLocation = location ? JSON.parse(location) : {};
-      } catch (err) {
-        console.warn("Invalid location JSON, using empty object");
-        parsedLocation = {};
-      }
-
-      try {
-        parsedFinancials = financials ? JSON.parse(financials) : {};
-      } catch (err) {
-        console.warn("Invalid financials JSON, using empty object");
-        parsedFinancials = {};
-      }
-
-      // SIMPLIFIED validation - only check for required title, no amount restrictions
-      if (!title || title.trim().length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Property title is required",
-        });
-      }
-
-      if (title.length > 200) {
-        return res.status(400).json({
-          success: false,
-          message: "Property title cannot exceed 200 characters",
-        });
-      }
-
-      // Clean and convert financial values - but allow ANY amount
-      if (parsedFinancials.totalValue !== undefined) {
-        let cleanValue = parsedFinancials.totalValue;
-        if (typeof cleanValue === "string") {
-          cleanValue = cleanValue.replace(/[^\d.]/g, "");
-        }
-
-        const totalValue = Number(cleanValue);
-
-        // Only check if it's a valid number - no minimum amount restriction
-        if (isNaN(totalValue)) {
-          return res.status(400).json({
-            success: false,
-            message: "Property total value must be a valid number",
-            debug: {
-              received: parsedFinancials.totalValue,
-              converted: totalValue,
-            },
-          });
-        }
-
-        // Admin can set any value - no restrictions!
-        parsedFinancials.totalValue = totalValue;
-        console.log(`Admin setting property value: ${totalValue}`);
-      }
-
-      // If OTP is not provided, send OTP and return
-      if (!otp) {
-        try {
-          const emailResult = await otpEmailService.sendOTP({
-            operation: "create",
-            propertyData: { title, propertyType },
-            adminUser: user,
-            propertyId: null,
-          });
-
-          return res.status(200).json({
-            success: true,
-            message: "OTP sent successfully",
-            data: {
-              step: "otp_required",
-              message: emailResult.fallbackMode
-                ? "Check console for OTP code (email service unavailable)"
-                : "Check your email for OTP code",
-              expiresIn: "10 minutes",
-              sentTo: emailResult.sentTo,
-              otpId: emailResult.otpId,
-            },
-          });
-        } catch (otpError) {
-          console.error("OTP sending failed:", otpError);
-          return res.status(500).json({
-            success: false,
-            message: "Failed to send OTP. Please try again.",
-          });
-        }
-      }
-
-      // Verify OTP if provided
-      if (otp) {
-        const verification = await otpEmailService.verifyOTP(
-          userId,
-          otp,
-          "create"
-        );
-        if (!verification.valid) {
-          return res.status(400).json({
-            success: false,
-            message: verification.reason,
-            attemptsRemaining: verification.attemptsRemaining,
-          });
-        }
-      }
-
-      // Create property with admin's chosen values - no restrictions
-      const propertyData = {
-        title: title.trim(),
-        description: description || "",
-        location: parsedLocation,
-        financials: {
-          totalValue: Number(parsedFinancials.totalValue) || 0,
-          expectedReturn:
-            Number(
-              parsedFinancials.expectedReturn || parsedFinancials.projectedYield
-            ) || 0,
-          projectedYield:
-            Number(
-              parsedFinancials.projectedYield || parsedFinancials.expectedReturn
-            ) || 0,
-          minimumInvestment: Number(parsedFinancials.minimumInvestment) || 1000,
-          // Let admin set whatever values they want
-          ...parsedFinancials,
-        },
-        propertyType: propertyType || "residential",
-        status: status || "active",
-        images: [],
-        timeline: {
-          launchDate: new Date(),
-          fundingDeadline: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-        },
-        createdBy: userId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      // Handle image uploads
-      if (req.files && req.files.length > 0) {
-        propertyData.images = req.files.map((file, index) => ({
-          url: `/uploads/${file.filename}`,
-          alt: `${title} - Image ${index + 1}`,
-          isPrimary: index === 0,
-          _id: new mongoose.Types.ObjectId(),
-        }));
-      }
-
-      // Create the property
-      const property = new Property(propertyData);
-      await property.save();
-
-      console.log(
-        `Property created by admin - Value: ${propertyData.financials.totalValue}`
-      );
-
-      res.status(201).json({
-        success: true,
-        message: "Property created successfully",
-        data: {
-          id: property._id,
-          title: property.title,
-          status: property.status,
-        },
-      });
-    } catch (error) {
-      console.error("Create property error:", error);
-      res.status(500).json({
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(401).json({
         success: false,
-        message: "Error creating property",
-        error:
-          process.env.NODE_ENV === "development" ? error.message : undefined,
+        message: "User not found. Please log in again.",
       });
     }
+
+    const {
+      title,
+      description,
+      location,
+      propertyType,
+      financials,
+      status,
+      otp,
+    } = req.body;
+
+    // Parse JSON fields
+    let parsedLocation = {};
+let parsedFinancials = {};
+
+try {
+  parsedLocation = location ? JSON.parse(location) : {};
+} catch (err) {
+  console.warn("Invalid location JSON, using empty object");
+  parsedLocation = {};
+}
+
+try {
+  parsedFinancials = financials ? JSON.parse(financials) : {};
+} catch (err) {
+  console.warn("Invalid financials JSON, using empty object");
+  parsedFinancials = {};
+}
+
+    // SIMPLIFIED validation - only check for required title, no amount restrictions
+    if (!title || title.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Property title is required",
+      });
+    }
+
+    if (title.length > 200) {
+      return res.status(400).json({
+        success: false,
+        message: "Property title cannot exceed 200 characters",
+      });
+    }
+
+    // Clean and convert financial values - but allow ANY amount
+    if (parsedFinancials.totalValue !== undefined) {
+      let cleanValue = parsedFinancials.totalValue;
+      if (typeof cleanValue === 'string') {
+        cleanValue = cleanValue.replace(/[^\d.]/g, '');
+      }
+      
+      const totalValue = Number(cleanValue);
+      
+      // Only check if it's a valid number - no minimum amount restriction
+      if (isNaN(totalValue)) {
+        return res.status(400).json({
+          success: false,
+          message: "Property total value must be a valid number",
+          debug: {
+            received: parsedFinancials.totalValue,
+            converted: totalValue
+          }
+        });
+      }
+
+      // Admin can set any value - no restrictions!
+      parsedFinancials.totalValue = totalValue;
+      console.log(`Admin setting property value: ${totalValue}`);
+    }
+
+    // If OTP is not provided, send OTP and return
+    if (!otp) {
+      try {
+        const emailResult = await otpEmailService.sendOTP({
+          operation: "create",
+          propertyData: { title, propertyType },
+          adminUser: user,
+          propertyId: null,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: "OTP sent successfully",
+          data: {
+            step: "otp_required",
+            message: emailResult.fallbackMode
+              ? "Check console for OTP code (email service unavailable)"
+              : "Check your email for OTP code",
+            expiresIn: "10 minutes",
+            sentTo: emailResult.sentTo,
+            otpId: emailResult.otpId,
+          },
+        });
+      } catch (otpError) {
+        console.error("OTP sending failed:", otpError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to send OTP. Please try again.",
+        });
+      }
+    }
+
+    // Verify OTP if provided
+    if (otp) {
+      const verification = await otpEmailService.verifyOTP(userId, otp, "create");
+      if (!verification.valid) {
+        return res.status(400).json({
+          success: false,
+          message: verification.reason,
+          attemptsRemaining: verification.attemptsRemaining,
+        });
+      }
+    }
+
+    // Create property with admin's chosen values - no restrictions
+    const propertyData = {
+      title: title.trim(),
+      description: description || "",
+      location: parsedLocation,
+      financials: {
+        totalValue: Number(parsedFinancials.totalValue) || 0,
+        expectedReturn: Number(parsedFinancials.expectedReturn || parsedFinancials.projectedYield) || 0,
+        projectedYield: Number(parsedFinancials.projectedYield || parsedFinancials.expectedReturn) || 0,
+        minimumInvestment: Number(parsedFinancials.minimumInvestment) || 1000,
+        // Let admin set whatever values they want
+        ...parsedFinancials
+      },
+      propertyType: propertyType || "residential",
+      status: status || "active",
+      images: [],
+      timeline: {
+        launchDate: new Date(),
+        fundingDeadline: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      },
+      createdBy: userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // Handle image uploads
+    if (req.files && req.files.length > 0) {
+      propertyData.images = req.files.map((file, index) => ({
+        url: `/uploads/${file.filename}`,
+        alt: `${title} - Image ${index + 1}`,
+        isPrimary: index === 0,
+        _id: new mongoose.Types.ObjectId(),
+      }));
+    }
+
+    // Create the property
+    const property = new Property(propertyData);
+    await property.save();
+
+    console.log(`Property created by admin - Value: ${propertyData.financials.totalValue}`);
+
+    res.status(201).json({
+      success: true,
+      message: "Property created successfully",
+      data: {
+        id: property._id,
+        title: property.title,
+        status: property.status,
+      },
+    });
+
+  } catch (error) {
+    console.error("Create property error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error creating property",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
+}
 
   async updateProperty(req, res) {
     try {
@@ -1466,163 +1270,159 @@ class AdminController {
   }
 
   async getProperties(req, res) {
-    try {
-      console.log("=== GET PROPERTIES - SHOW ALL ===");
-      console.log("Query params:", req.query);
+  try {
+    console.log("=== GET PROPERTIES - SHOW ALL ===");
+    console.log("Query params:", req.query);
 
-      const {
-        page = 1,
-        limit = 20,
-        sort = "-createdAt",
-        propertyType,
-        search,
-        city,
-      } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      sort = "-createdAt",
+      propertyType,
+      search,
+      city,
+    } = req.query;
 
-      // Build filter - NO STATUS FILTERING AT ALL
-      const filter = {};
+    // Build filter - NO STATUS FILTERING AT ALL
+    const filter = {};
 
-      // Only filter by non-status fields
-      if (propertyType && propertyType !== "all") {
-        console.log("PropertyType filter:", propertyType);
-        filter.propertyType = propertyType;
-      }
+    // Only filter by non-status fields
+    if (propertyType && propertyType !== 'all') {
+      console.log("PropertyType filter:", propertyType);
+      filter.propertyType = propertyType;
+    }
+    
+    if (city) {
+      console.log("City filter:", city);
+      filter["location.city"] = city.toLowerCase();
+    }
 
-      if (city) {
-        console.log("City filter:", city);
-        filter["location.city"] = city.toLowerCase();
-      }
+    if (search) {
+      console.log("Search filter:", search);
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { titleAr: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { "location.address": { $regex: search, $options: "i" } },
+        { "location.city": { $regex: search, $options: "i" } },
+      ];
+    }
 
-      if (search) {
-        console.log("Search filter:", search);
-        filter.$or = [
-          { title: { $regex: search, $options: "i" } },
-          { titleAr: { $regex: search, $options: "i" } },
-          { description: { $regex: search, $options: "i" } },
-          { "location.address": { $regex: search, $options: "i" } },
-          { "location.city": { $regex: search, $options: "i" } },
-        ];
-      }
+    console.log("Final filter (NO STATUS FILTER):", JSON.stringify(filter, null, 2));
 
-      console.log(
-        "Final filter (NO STATUS FILTER):",
-        JSON.stringify(filter, null, 2)
-      );
+    // Debug info
+    const totalInDB = await Property.countDocuments();
+    const matchingFilter = await Property.countDocuments(filter);
+    
+    console.log(`Total properties in DB: ${totalInDB}`);
+    console.log(`Properties matching filter: ${matchingFilter}`);
 
-      // Debug info
-      const totalInDB = await Property.countDocuments();
-      const matchingFilter = await Property.countDocuments(filter);
+    // Show all statuses in DB
+    const statusStats = await Property.aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    console.log("All statuses in DB:", statusStats);
 
-      console.log(`Total properties in DB: ${totalInDB}`);
-      console.log(`Properties matching filter: ${matchingFilter}`);
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
 
-      // Show all statuses in DB
-      const statusStats = await Property.aggregate([
+    // Get ALL properties (no status filtering in aggregation either)
+    const [properties, totalProperties] = await Promise.all([
+      Property.aggregate([
+        { $match: filter }, // No status filter here
         {
-          $group: {
-            _id: "$status",
-            count: { $sum: 1 },
+          $lookup: {
+            from: "investments",
+            localField: "_id",
+            foreignField: "property",
+            as: "investments",
           },
         },
-        { $sort: { _id: 1 } },
-      ]);
-      console.log("All statuses in DB:", statusStats);
-
-      // Pagination
-      const pageNum = parseInt(page);
-      const limitNum = parseInt(limit);
-      const skip = (pageNum - 1) * limitNum;
-
-      // Get ALL properties (no status filtering in aggregation either)
-      const [properties, totalProperties] = await Promise.all([
-        Property.aggregate([
-          { $match: filter }, // No status filter here
-          {
-            $lookup: {
-              from: "investments",
-              localField: "_id",
-              foreignField: "property",
-              as: "investments",
-            },
-          },
-          {
-            $addFields: {
-              investorCount: { $size: "$investments" },
-              totalInvested: { $ifNull: [{ $sum: "$investments.amount" }, 0] },
-              fundingProgress: {
-                $cond: {
-                  if: { $gt: ["$financials.totalValue", 0] },
-                  then: {
-                    $multiply: [
-                      {
-                        $divide: [
-                          { $ifNull: [{ $sum: "$investments.amount" }, 0] },
-                          "$financials.totalValue",
-                        ],
-                      },
-                      100,
-                    ],
-                  },
-                  else: { $ifNull: ["$fundingProgress", 0] },
+        {
+          $addFields: {
+            investorCount: { $size: "$investments" },
+            totalInvested: { $ifNull: [{ $sum: "$investments.amount" }, 0] },
+            fundingProgress: {
+              $cond: {
+                if: { $gt: ["$financials.totalValue", 0] },
+                then: {
+                  $multiply: [
+                    { 
+                      $divide: [
+                        { $ifNull: [{ $sum: "$investments.amount" }, 0] }, 
+                        "$financials.totalValue"
+                      ] 
+                    },
+                    100
+                  ]
                 },
+                else: { $ifNull: ["$fundingProgress", 0] }
               },
             },
           },
-          {
-            $sort: {
-              [sort.startsWith("-") ? sort.substring(1) : sort]:
-                sort.startsWith("-") ? -1 : 1,
-            },
-          },
-          { $skip: skip },
-          { $limit: limitNum },
-        ]),
-        Property.countDocuments(filter),
-      ]);
-
-      console.log(`Found ${properties.length} properties`);
-      properties.forEach((prop, index) => {
-        console.log(
-          `Property ${index + 1}: ${prop.title} - Status: ${prop.status}`
-        );
-      });
-
-      const totalPages = Math.ceil(totalProperties / limitNum);
-
-      logger.info(
-        `Admin fetched ALL properties - Admin: ${req.user.id}, Found: ${properties.length}/${totalProperties}`
-      );
-
-      res.json({
-        success: true,
-        data: {
-          properties,
-          pagination: {
-            page: pageNum,
-            pages: totalPages,
-            total: totalProperties,
-            limit: limitNum,
-            hasNext: pageNum < totalPages,
-            hasPrev: pageNum > 1,
-          },
-          debug: {
-            totalInDB,
-            matchingFilter,
-            statusStats,
-            message: "Showing ALL properties regardless of status",
+        },
+        {
+          $sort: {
+            [sort.startsWith("-") ? sort.substring(1) : sort]:
+              sort.startsWith("-") ? -1 : 1,
           },
         },
-      });
-    } catch (error) {
-      console.error("Get properties error:", error);
-      logger.error("Get properties error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error fetching properties",
-        error: error.message,
-      });
-    }
+        { $skip: skip },
+        { $limit: limitNum },
+      ]),
+      Property.countDocuments(filter),
+    ]);
+
+    console.log(`Found ${properties.length} properties`);
+    properties.forEach((prop, index) => {
+      console.log(`Property ${index + 1}: ${prop.title} - Status: ${prop.status}`);
+    });
+
+    const totalPages = Math.ceil(totalProperties / limitNum);
+
+    logger.info(
+      `Admin fetched ALL properties - Admin: ${req.user.id}, Found: ${properties.length}/${totalProperties}`
+    );
+
+    res.json({
+      success: true,
+      data: {
+        properties,
+        pagination: {
+          page: pageNum,
+          pages: totalPages,
+          total: totalProperties,
+          limit: limitNum,
+          hasNext: pageNum < totalPages,
+          hasPrev: pageNum > 1,
+        },
+        debug: {
+          totalInDB,
+          matchingFilter,
+          statusStats,
+          message: "Showing ALL properties regardless of status"
+        }
+      },
+    });
+
+  } catch (error) {
+    console.error("Get properties error:", error);
+    logger.error("Get properties error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching properties",
+      error: error.message,
+    });
   }
+}
 
   async getPropertyById(req, res) {
     try {
@@ -2056,273 +1856,275 @@ class AdminController {
     }
   }
 
-  // async createProperty(req, res) {
-  //   try {
-  //     console.log("=== CREATE PROPERTY WITH DATABASE OTP ===");
-  //     console.log("Body:", req.body);
-  //     console.log("Files:", req.files);
+  
 
-  //     const userId = req.user.id;
+// async createProperty(req, res) {
+//   try {
+//     console.log("=== CREATE PROPERTY WITH DATABASE OTP ===");
+//     console.log("Body:", req.body);
+//     console.log("Files:", req.files);
 
-  //     // Add null check for user
-  //     const user = await User.findById(userId);
-  //     if (!user) {
-  //       return res.status(401).json({
-  //         success: false,
-  //         message: "User not found. Please log in again.",
-  //       });
-  //     }
+//     const userId = req.user.id;
 
-  //     console.log("User found:", {
-  //       id: user._id,
-  //       email: user.email,
-  //       role: user.role,
-  //     });
+//     // Add null check for user
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "User not found. Please log in again.",
+//       });
+//     }
 
-  //     // Extract fields from request
-  //     const {
-  //       title,
-  //       description,
-  //       location,
-  //       propertyType,
-  //       financials,
-  //       status,
-  //       otp,
-  //     } = req.body;
+//     console.log("User found:", {
+//       id: user._id,
+//       email: user.email,
+//       role: user.role,
+//     });
 
-  //     // Parse JSON fields
-  //     let parsedLocation = {};
-  //     let parsedFinancials = {};
+//     // Extract fields from request
+//     const {
+//       title,
+//       description,
+//       location,
+//       propertyType,
+//       financials,
+//       status,
+//       otp,
+//     } = req.body;
 
-  //     try {
-  //       parsedLocation =
-  //         typeof location === "string" ? JSON.parse(location) : location || {};
-  //       parsedFinancials =
-  //         typeof financials === "string"
-  //           ? JSON.parse(financials)
-  //           : financials || {};
-  //     } catch (parseError) {
-  //       console.error("Error parsing JSON fields:", parseError);
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: "Invalid JSON in location or financials fields",
-  //       });
-  //     }
+//     // Parse JSON fields
+//     let parsedLocation = {};
+//     let parsedFinancials = {};
 
-  //     // Enhanced validation for financials
-  //     if (parsedFinancials.totalValue !== undefined) {
-  //       const totalValue = Number(parsedFinancials.totalValue);
+//     try {
+//       parsedLocation =
+//         typeof location === "string" ? JSON.parse(location) : location || {};
+//       parsedFinancials =
+//         typeof financials === "string"
+//           ? JSON.parse(financials)
+//           : financials || {};
+//     } catch (parseError) {
+//       console.error("Error parsing JSON fields:", parseError);
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid JSON in location or financials fields",
+//       });
+//     }
 
-  //       if (isNaN(totalValue)) {
-  //         return res.status(400).json({
-  //           success: false,
-  //           message: "Property total value must be a valid number",
-  //         });
-  //       }
+//     // Enhanced validation for financials
+//     if (parsedFinancials.totalValue !== undefined) {
+//       const totalValue = Number(parsedFinancials.totalValue);
+      
+//       if (isNaN(totalValue)) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Property total value must be a valid number",
+//         });
+//       }
 
-  //       if (totalValue < 100000) {
-  //         return res.status(400).json({
-  //           success: false,
-  //           message: "Property total value must be at least ₹1,00,000",
-  //           validation: {
-  //             field: "financials.totalValue",
-  //             minimum: 100000,
-  //             received: totalValue,
-  //           },
-  //         });
-  //       }
+//       if (totalValue < 100000) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Property total value must be at least ₹1,00,000",
+//           validation: {
+//             field: "financials.totalValue",
+//             minimum: 100000,
+//             received: totalValue,
+//           },
+//         });
+//       }
 
-  //       // Additional financial validations
-  //       if (parsedFinancials.expectedReturn !== undefined) {
-  //         const expectedReturn = Number(parsedFinancials.expectedReturn);
-  //         if (isNaN(expectedReturn) || expectedReturn < 0 || expectedReturn > 100) {
-  //           return res.status(400).json({
-  //             success: false,
-  //             message: "Expected return must be between 0% and 100%",
-  //           });
-  //         }
-  //       }
+//       // Additional financial validations
+//       if (parsedFinancials.expectedReturn !== undefined) {
+//         const expectedReturn = Number(parsedFinancials.expectedReturn);
+//         if (isNaN(expectedReturn) || expectedReturn < 0 || expectedReturn > 100) {
+//           return res.status(400).json({
+//             success: false,
+//             message: "Expected return must be between 0% and 100%",
+//           });
+//         }
+//       }
 
-  //       if (parsedFinancials.minimumInvestment !== undefined) {
-  //         const minInvestment = Number(parsedFinancials.minimumInvestment);
-  //         if (isNaN(minInvestment) || minInvestment < 1000) {
-  //           return res.status(400).json({
-  //             success: false,
-  //             message: "Minimum investment must be at least ₹1,000",
-  //           });
-  //         }
+//       if (parsedFinancials.minimumInvestment !== undefined) {
+//         const minInvestment = Number(parsedFinancials.minimumInvestment);
+//         if (isNaN(minInvestment) || minInvestment < 1000) {
+//           return res.status(400).json({
+//             success: false,
+//             message: "Minimum investment must be at least ₹1,000",
+//           });
+//         }
 
-  //         if (minInvestment > totalValue) {
-  //           return res.status(400).json({
-  //             success: false,
-  //             message: "Minimum investment cannot exceed total property value",
-  //           });
-  //         }
-  //       }
-  //     }
+//         if (minInvestment > totalValue) {
+//           return res.status(400).json({
+//             success: false,
+//             message: "Minimum investment cannot exceed total property value",
+//           });
+//         }
+//       }
+//     }
 
-  //     // Validate title
-  //     if (!title || title.trim().length === 0) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: "Property title is required",
-  //       });
-  //     }
+//     // Validate title
+//     if (!title || title.trim().length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Property title is required",
+//       });
+//     }
 
-  //     if (title.length > 200) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: "Property title cannot exceed 200 characters",
-  //       });
-  //     }
+//     if (title.length > 200) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Property title cannot exceed 200 characters",
+//       });
+//     }
 
-  //     // If OTP is not provided, send OTP and return
-  //     if (!otp) {
-  //       try {
-  //         console.log("Sending OTP for user:", user._id);
+//     // If OTP is not provided, send OTP and return
+//     if (!otp) {
+//       try {
+//         console.log("Sending OTP for user:", user._id);
 
-  //         const emailResult = await otpEmailService.sendOTP({
-  //           operation: "create",
-  //           propertyData: { title, propertyType },
-  //           adminUser: user,
-  //           propertyId: null,
-  //         });
+//         const emailResult = await otpEmailService.sendOTP({
+//           operation: "create",
+//           propertyData: { title, propertyType },
+//           adminUser: user,
+//           propertyId: null,
+//         });
 
-  //         console.log("OTP sent for create operation:", emailResult.otpId);
+//         console.log("OTP sent for create operation:", emailResult.otpId);
 
-  //         return res.status(200).json({
-  //           success: true,
-  //           message: "OTP sent successfully",
-  //           data: {
-  //             step: "otp_required",
-  //             message: emailResult.fallbackMode
-  //               ? "Check console for OTP code (email service unavailable)"
-  //               : "Check your email for OTP code",
-  //             expiresIn: "10 minutes",
-  //             sentTo: emailResult.sentTo,
-  //             otpId: emailResult.otpId,
-  //           },
-  //         });
-  //       } catch (otpError) {
-  //         console.error("OTP sending failed:", otpError);
-  //         logger.error("OTP sending failed:", otpError);
-  //         return res.status(500).json({
-  //           success: false,
-  //           message: "Failed to send OTP. Please try again.",
-  //           error:
-  //             process.env.NODE_ENV === "development"
-  //               ? otpError.message
-  //               : undefined,
-  //         });
-  //       }
-  //     }
+//         return res.status(200).json({
+//           success: true,
+//           message: "OTP sent successfully",
+//           data: {
+//             step: "otp_required",
+//             message: emailResult.fallbackMode
+//               ? "Check console for OTP code (email service unavailable)"
+//               : "Check your email for OTP code",
+//             expiresIn: "10 minutes",
+//             sentTo: emailResult.sentTo,
+//             otpId: emailResult.otpId,
+//           },
+//         });
+//       } catch (otpError) {
+//         console.error("OTP sending failed:", otpError);
+//         logger.error("OTP sending failed:", otpError);
+//         return res.status(500).json({
+//           success: false,
+//           message: "Failed to send OTP. Please try again.",
+//           error:
+//             process.env.NODE_ENV === "development"
+//               ? otpError.message
+//               : undefined,
+//         });
+//       }
+//     }
 
-  //     // If OTP is provided, verify it
-  //     if (otp) {
-  //       const verification = await otpEmailService.verifyOTP(
-  //         userId,
-  //         otp,
-  //         "create"
-  //       );
+//     // If OTP is provided, verify it
+//     if (otp) {
+//       const verification = await otpEmailService.verifyOTP(
+//         userId,
+//         otp,
+//         "create"
+//       );
 
-  //       if (!verification.valid) {
-  //         return res.status(400).json({
-  //           success: false,
-  //           message: verification.reason,
-  //           attemptsRemaining: verification.attemptsRemaining,
-  //         });
-  //       }
+//       if (!verification.valid) {
+//         return res.status(400).json({
+//           success: false,
+//           message: verification.reason,
+//           attemptsRemaining: verification.attemptsRemaining,
+//         });
+//       }
 
-  //       console.log(
-  //         `OTP verified successfully for create operation - User: ${userId}`
-  //       );
-  //       logger.info(
-  //         `OTP verified successfully for create operation - User: ${userId}, OTP ID: ${verification.otpRecord._id}`
-  //       );
-  //     }
+//       console.log(
+//         `OTP verified successfully for create operation - User: ${userId}`
+//       );
+//       logger.info(
+//         `OTP verified successfully for create operation - User: ${userId}, OTP ID: ${verification.otpRecord._id}`
+//       );
+//     }
 
-  //     // Continue with property creation after validation and OTP verification
-  //     const propertyData = {
-  //       title: title.trim(),
-  //       description: description || "",
-  //       location: parsedLocation,
-  //       financials: {
-  //         ...parsedFinancials,
-  //         totalValue: Number(parsedFinancials.totalValue) || 0,
-  //         expectedReturn: Number(parsedFinancials.expectedReturn) || 0,
-  //         minimumInvestment: Number(parsedFinancials.minimumInvestment) || 1000,
-  //       },
-  //       propertyType: propertyType || "residential",
-  //       status: status || "active",
-  //       images: [],
-  //       timeline: {
-  //         launchDate: new Date(),
-  //         fundingDeadline: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-  //       },
-  //       createdBy: userId,
-  //       createdAt: new Date(),
-  //       updatedAt: new Date(),
-  //     };
+//     // Continue with property creation after validation and OTP verification
+//     const propertyData = {
+//       title: title.trim(),
+//       description: description || "",
+//       location: parsedLocation,
+//       financials: {
+//         ...parsedFinancials,
+//         totalValue: Number(parsedFinancials.totalValue) || 0,
+//         expectedReturn: Number(parsedFinancials.expectedReturn) || 0,
+//         minimumInvestment: Number(parsedFinancials.minimumInvestment) || 1000,
+//       },
+//       propertyType: propertyType || "residential",
+//       status: status || "active",
+//       images: [],
+//       timeline: {
+//         launchDate: new Date(),
+//         fundingDeadline: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+//       },
+//       createdBy: userId,
+//       createdAt: new Date(),
+//       updatedAt: new Date(),
+//     };
 
-  //     // Handle image uploads if any
-  //     if (req.files && req.files.length > 0) {
-  //       propertyData.images = req.files.map((file, index) => ({
-  //         url: `/uploads/${file.filename}`,
-  //         alt: `${title} - Image ${index + 1}`,
-  //         isPrimary: index === 0,
-  //         _id: new mongoose.Types.ObjectId(),
-  //       }));
-  //     }
+//     // Handle image uploads if any
+//     if (req.files && req.files.length > 0) {
+//       propertyData.images = req.files.map((file, index) => ({
+//         url: `/uploads/${file.filename}`,
+//         alt: `${title} - Image ${index + 1}`,
+//         isPrimary: index === 0,
+//         _id: new mongoose.Types.ObjectId(),
+//       }));
+//     }
 
-  //     // Create the property
-  //     const property = new Property(propertyData);
-  //     await property.save();
+//     // Create the property
+//     const property = new Property(propertyData);
+//     await property.save();
 
-  //     logger.info(
-  //       `Property created successfully - ID: ${property._id}, Title: ${property.title}, Created by: ${userId}`
-  //     );
+//     logger.info(
+//       `Property created successfully - ID: ${property._id}, Title: ${property.title}, Created by: ${userId}`
+//     );
 
-  //     res.status(201).json({
-  //       success: true,
-  //       message: "Property created successfully",
-  //       data: {
-  //         id: property._id,
-  //         title: property.title,
-  //         status: property.status,
-  //       },
-  //     });
-  //   } catch (error) {
-  //     console.error("Create property error:", error);
+//     res.status(201).json({
+//       success: true,
+//       message: "Property created successfully",
+//       data: {
+//         id: property._id,
+//         title: property.title,
+//         status: property.status,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Create property error:", error);
+    
+//     // Handle mongoose validation errors more gracefully
+//     if (error.name === 'ValidationError') {
+//       const validationErrors = Object.keys(error.errors).map(key => ({
+//         field: key,
+//         message: error.errors[key].message,
+//         value: error.errors[key].value,
+//       }));
 
-  //     // Handle mongoose validation errors more gracefully
-  //     if (error.name === 'ValidationError') {
-  //       const validationErrors = Object.keys(error.errors).map(key => ({
-  //         field: key,
-  //         message: error.errors[key].message,
-  //         value: error.errors[key].value,
-  //       }));
+//       return res.status(400).json({
+//         success: false,
+//         message: "Property validation failed",
+//         validationErrors: validationErrors,
+//       });
+//     }
 
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: "Property validation failed",
-  //         validationErrors: validationErrors,
-  //       });
-  //     }
+//     logger.error("Create property error:", {
+//       error: error.message,
+//       stack: error.stack,
+//       userId: req.user?.id,
+//     });
 
-  //     logger.error("Create property error:", {
-  //       error: error.message,
-  //       stack: error.stack,
-  //       userId: req.user?.id,
-  //     });
-
-  //     res.status(500).json({
-  //       success: false,
-  //       message: "Error creating property",
-  //       error:
-  //         process.env.NODE_ENV === "development" ? error.message : undefined,
-  //     });
-  //   }
-  // }
+//     res.status(500).json({
+//       success: false,
+//       message: "Error creating property",
+//       error:
+//         process.env.NODE_ENV === "development" ? error.message : undefined,
+//     });
+//   }
+// }
 
   async updateProperty(req, res) {
     try {
@@ -3007,5 +2809,6 @@ class AdminController {
       });
     }
   }
+
 }
 module.exports = new AdminController();
