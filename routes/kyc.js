@@ -21,10 +21,11 @@ router.get('/',
   kycController.getKYCData
 );
 
+
 router.get('/admin/all',
   authenticate,
   authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'),
-  kycController.getAllKYCDataForAdmin
+  kycController.getAllKYCData 
 );
 
 router.put('/admin/:kycId/status',
