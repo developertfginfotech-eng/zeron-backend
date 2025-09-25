@@ -21,10 +21,15 @@ router.get('/',
   kycController.getKYCData
 );
 
-router.get('/all', 
+router.get('/admin/all',
   authenticate,
   authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'),
-  kycController.getAllKYCData
+  kycController.getAllKYCDataForAdmin
 );
 
+router.put('/admin/:kycId/status',
+  authenticate,
+  authorize('admin', 'super_admin', 'kyc_officer'),
+  kycController.updateKYCStatus
+);
 module.exports = router;

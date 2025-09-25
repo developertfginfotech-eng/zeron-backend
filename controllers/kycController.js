@@ -197,81 +197,111 @@ class KYCController {
   }
 
   async getAllKYCData(req, res, next) {
-    try {
-      const { page = 1, limit = 20, status } = req.query;
-      
-      // Build filter
-      const filter = {};
-      if (status && status !== 'all') {
-        filter.status = status;
-      }
-
-      const allKYC = await KYC.find(filter)
-        .populate('user', 'email fullNameArabic fullNameEnglish kycStatus occupation')
-        .sort({ submittedAt: -1, createdAt: -1 })
-        .limit(parseInt(limit))
-        .skip((parseInt(page) - 1) * parseInt(limit))
-        .lean();
-
-      // Add completion percentages
-      const kycWithCompletion = allKYC.map(kyc => {
-        // Calculate completion percentage inline
-        let completed = 0;
-        const totalSteps = 4;
-        
-        if (kyc.documents?.nationalId?.url) completed++;
-        if (kyc.documents?.selfie?.url) completed++;
-        if (kyc.documents?.proofOfIncome?.url) completed++;
-        if (kyc.documents?.addressProof?.url) completed++;
-        
-        const completionPercentage = Math.round((completed / totalSteps) * 100);
-
-        return {
-          ...kyc,
-          completionPercentage
-        };
-      });
-
-      // Get total count for pagination
-      const totalCount = await KYC.countDocuments(filter);
-
-      // Calculate statistics
-      const statsAggregation = await KYC.aggregate([
-        {
-          $group: {
-            _id: '$status',
-            count: { $sum: 1 }
-          }
-        }
-      ]);
-
-      const stats = statsAggregation.reduce((acc, stat) => {
-        acc[stat._id] = stat.count;
-        return acc;
-      }, {});
-
-      const totalApplicants = Object.values(stats).reduce((sum, count) => sum + count, 0);
-      const approved = stats.approved || 0;
-      const pending = (stats.pending || 0) + (stats.under_review || 0) + (stats.submitted || 0);
-      const rejected = stats.rejected || 0;
-
-      res.status(200).json({
-        success: true,
-        data: kycWithCompletion,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: totalCount,
-          pages: Math.ceil(totalCount / parseInt(limit))
-        },
-        stats: { totalApplicants, approved, pending, rejected }
-      });
-    } catch (error) {
-      logger.error('Get all KYC data error:', error);
-      next(error);
+  try {
+    const { page = 1, limit = 20, status, search } = req.query;
+    
+    // Build filter
+    const filter = {};
+    if (status && status !== 'all') {
+      filter.status = status;
     }
-  }
 
+    const allKYC = await KYC.find(filter)
+      .populate('user', 'firstName lastName email phone dateOfBirth kycStatus status createdAt')
+      .sort({ submittedAt: -1, createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .lean();
+
+    // Transform data for admin dashboard
+    const kycForAdmin = allKYC.map(kyc => {
+      // Calculate completion percentage
+      let completed = 0;
+      const totalSteps = 4;
+      
+      if (kyc.documents?.nationalId?.url) completed++;
+      if (kyc.documents?.selfie?.url) completed++;
+      if (kyc.documents?.proofOfIncome?.url) completed++;
+      if (kyc.documents?.addressProof?.url) completed++;
+      
+      const completionPercentage = Math.round((completed / totalSteps) * 100);
+
+      return {
+        id: kyc._id,
+        name: `${kyc.user?.firstName || ''} ${kyc.user?.lastName || ''}`.trim() || 'No Name',
+        firstName: kyc.user?.firstName || '',
+        lastName: kyc.user?.lastName || '',
+        email: kyc.user?.email || '',
+        phone: kyc.personalInfo?.phoneNumber || kyc.user?.phone || '',
+        dateOfBirth: kyc.personalInfo?.dateOfBirth || kyc.user?.dateOfBirth,
+        occupation: kyc.personalInfo?.occupation || 'Not specified',
+        city: kyc.address?.city || 'Not specified',
+        nationality: kyc.personalInfo?.nationality || 'Not specified',
+        kycStatus: kyc.status,
+        monthlyIncome: kyc.personalInfo?.monthlyIncome?.toString() || '0',
+        completionPercentage,
+        kycSubmittedAt: kyc.submittedAt || kyc.createdAt,
+        appDownloadedAt: kyc.user?.createdAt,
+        documents: kyc.documents || {},
+        reviewNotes: kyc.reviewNotes || null,
+        rejectionReasons: kyc.rejectionReasons || []
+      };
+    });
+
+    // Filter by search if needed
+    let filteredKYC = kycForAdmin;
+    if (search) {
+      filteredKYC = kycForAdmin.filter(item => 
+        item.name.toLowerCase().includes(search.toLowerCase()) ||
+        item.email.toLowerCase().includes(search.toLowerCase()) ||
+        item.occupation.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    // Get total count for pagination
+    const totalCount = await KYC.countDocuments(filter);
+
+    // Calculate statistics
+    const statsAggregation = await KYC.aggregate([
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const stats = statsAggregation.reduce((acc, stat) => {
+      acc[stat._id] = stat.count;
+      return acc;
+    }, {});
+
+    const totalApplicants = Object.values(stats).reduce((sum, count) => sum + count, 0);
+    const approved = stats.approved || 0;
+    const pending = (stats.pending || 0) + (stats.under_review || 0) + (stats.submitted || 0);
+    const rejected = stats.rejected || 0;
+
+    res.status(200).json({
+      success: true,
+      data: filteredKYC,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalCount,
+        pages: Math.ceil(totalCount / parseInt(limit))
+      },
+      stats: { 
+        totalApplicants, 
+        approved, 
+        pending, 
+        rejected 
+      }
+    });
+  } catch (error) {
+    logger.error('Get all KYC data error:', error);
+    next(error);
+  }
+}
   // Admin method to update KYC status
   async updateKYCStatus(req, res, next) {
     try {
