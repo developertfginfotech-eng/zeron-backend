@@ -818,7 +818,6 @@ async createProperty(req, res) {
       });
     }
 
-    // SIMPLIFIED validation - only check for required title, no amount restrictions
     if (!title || title.trim().length === 0) {
       return res.status(400).json({
         success: false,
