@@ -1350,36 +1350,23 @@ async createProperty(req, res) {
 
   async getProperties(req, res) {
   try {
-    console.log("=== DEBUG: getProperties called ===");
+    console.log("=== GET PROPERTIES - SHOW ALL ===");
     console.log("Query params:", req.query);
-    console.log("User:", req.user.id);
 
     const {
       page = 1,
       limit = 20,
       sort = "-createdAt",
-      status, 
       propertyType,
       search,
       city,
     } = req.query;
 
-    // Build filter
+    // Build filter - NO STATUS FILTERING AT ALL
     const filter = {};
 
-    // Debug the status filtering
-    if (status) {
-      console.log("Status param provided:", status);
-      const statusArray = status.split(',').map(s => s.trim());
-      filter.status = { $in: statusArray };
-      console.log("Status filter:", filter.status);
-    } else {
-      console.log("No status param - using default filter");
-      filter.status = { $in: ['draft', 'active', 'fully_funded', 'completed', 'cancelled', 'upcoming'] };
-      console.log("Default status filter:", filter.status);
-    }
-
-    if (propertyType) {
+    // Only filter by non-status fields
+    if (propertyType && propertyType !== 'all') {
       console.log("PropertyType filter:", propertyType);
       filter.propertyType = propertyType;
     }
@@ -1400,40 +1387,36 @@ async createProperty(req, res) {
       ];
     }
 
-    console.log("Final filter:", JSON.stringify(filter, null, 2));
+    console.log("Final filter (NO STATUS FILTER):", JSON.stringify(filter, null, 2));
 
-    // Test the filter first
+    // Debug info
     const totalInDB = await Property.countDocuments();
     const matchingFilter = await Property.countDocuments(filter);
     
     console.log(`Total properties in DB: ${totalInDB}`);
     console.log(`Properties matching filter: ${matchingFilter}`);
 
-    // Get sample documents to see what we're working with
-    const sampleDocs = await Property.find({}, { title: 1, status: 1, propertyType: 1 }).limit(5);
-    console.log("Sample documents:", sampleDocs);
+    // Show all statuses in DB
+    const statusStats = await Property.aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    console.log("All statuses in DB:", statusStats);
 
     // Pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    console.log(`Pagination: page=${pageNum}, limit=${limitNum}, skip=${skip}`);
-
-    // Try simple find first instead of aggregation
-    const simpleProperties = await Property.find(filter)
-      .sort(sort.startsWith("-") ? { [sort.substring(1)]: -1 } : { [sort]: 1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean();
-
-    console.log(`Simple find returned: ${simpleProperties.length} properties`);
-    console.log("Property titles:", simpleProperties.map(p => p.title));
-
-    // Now try the aggregation
+    // Get ALL properties (no status filtering in aggregation either)
     const [properties, totalProperties] = await Promise.all([
       Property.aggregate([
-        { $match: filter },
+        { $match: filter }, // No status filter here
         {
           $lookup: {
             from: "investments",
@@ -1477,16 +1460,18 @@ async createProperty(req, res) {
       Property.countDocuments(filter),
     ]);
 
-    console.log(`Aggregation returned: ${properties.length} properties`);
-    console.log("Aggregation titles:", properties.map(p => p.title));
+    console.log(`Found ${properties.length} properties`);
+    properties.forEach((prop, index) => {
+      console.log(`Property ${index + 1}: ${prop.title} - Status: ${prop.status}`);
+    });
 
     const totalPages = Math.ceil(totalProperties / limitNum);
 
     logger.info(
-      `Admin fetched properties list - Admin: ${req.user.id}, Page: ${pageNum}, Found: ${properties.length}/${totalProperties}`
+      `Admin fetched ALL properties - Admin: ${req.user.id}, Found: ${properties.length}/${totalProperties}`
     );
 
-    const response = {
+    res.json({
       success: true,
       data: {
         properties,
@@ -1501,17 +1486,12 @@ async createProperty(req, res) {
         debug: {
           totalInDB,
           matchingFilter,
-          filterUsed: filter,
-          simpleQueryCount: simpleProperties.length,
-          aggregationCount: properties.length
+          statusStats,
+          message: "Showing ALL properties regardless of status"
         }
       },
-    };
+    });
 
-    console.log("Response pagination:", response.data.pagination);
-    console.log("=== DEBUG: Response ready ===");
-
-    res.json(response);
   } catch (error) {
     console.error("Get properties error:", error);
     logger.error("Get properties error:", error);
@@ -1522,7 +1502,6 @@ async createProperty(req, res) {
     });
   }
 }
-
 
   async getPropertyById(req, res) {
     try {
