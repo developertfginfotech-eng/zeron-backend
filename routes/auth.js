@@ -57,8 +57,56 @@ const loginValidation = [
     .withMessage('Password is required')
 ];
 
+const forgotPasswordValidation = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email required')
+];
+
+const resetPasswordValidation = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email required'),
+  body('otp')
+    .isLength({ min: 6, max: 6 })
+    .isNumeric()
+    .withMessage('OTP must be 6 digits'),
+  body('newPassword')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
+    .withMessage('Password must contain uppercase, lowercase, number and special character')
+];
+
+const verifyOTPValidation = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email required'),
+  body('otp')
+    .isLength({ min: 6, max: 6 })
+    .isNumeric()
+    .withMessage('OTP must be 6 digits')
+];
+
+// Rate limiter for password reset requests
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Allow 5 password reset attempts per 15 minutes
+  message: {
+    success: false,
+    message: 'Too many password reset attempts, please try again later.'
+  }
+});
 
 router.post('/register',upload.none(), registerLimiter, registerValidation, authController.register);
 router.post('/login', upload.none(), authLimiter, loginValidation, authController.login);
+
+// Password reset routes
+router.post('/forgot-password', upload.none(), passwordResetLimiter, forgotPasswordValidation, authController.forgotPassword);
+router.post('/reset-password', upload.none(), passwordResetLimiter, resetPasswordValidation, authController.resetPassword);
+router.post('/verify-reset-otp', upload.none(), authLimiter, verifyOTPValidation, authController.verifyResetOTP);
 
 module.exports = router;

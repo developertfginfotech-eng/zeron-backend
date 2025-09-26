@@ -3,6 +3,8 @@ const KYC = require("../models/KYC");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
 const logger = require("../utils/logger");
+const notificationService = require("../utils/notificationService");
+const passwordResetService = require("../utils/passwordResetService");
 
 // Token generator (kept inside the same file)
 function generateToken(userId) {
@@ -59,6 +61,15 @@ class AuthController {
       const token = generateToken(user._id);
 
       logger.info(`New user registered: ${email}`);
+
+      // Send welcome notification
+      try {
+        await notificationService.notifyUserRegistration(user._id);
+        logger.info(`Welcome notification sent to user: ${email}`);
+      } catch (notificationError) {
+        logger.error('Failed to send welcome notification:', notificationError);
+        // Continue without failing the registration
+      }
 
       res.status(201).json({
         success: true,
@@ -160,6 +171,148 @@ class AuthController {
       });
     } catch (error) {
       logger.error("Login error:", error);
+      next(error);
+    }
+  }
+
+  // Forgot password - send OTP
+  async forgotPassword(req, res, next) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { email } = req.body;
+
+      // Send password reset OTP
+      const result = await passwordResetService.sendPasswordResetOTP(email, req);
+
+      logger.info(`Password reset OTP requested for: ${email}`, {
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        otpId: result.otpId
+      });
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: {
+          email: email,
+          otpId: result.otpId,
+          fallbackMode: result.fallbackMode || false
+        }
+      });
+
+    } catch (error) {
+      logger.error("Forgot password error:", error);
+      next(error);
+    }
+  }
+
+  // Reset password with OTP
+  async resetPassword(req, res, next) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { email, otp, newPassword } = req.body;
+
+      // Verify OTP
+      const otpVerification = await passwordResetService.verifyPasswordResetOTP(email, otp);
+
+      if (!otpVerification.valid) {
+        return res.status(400).json({
+          success: false,
+          message: otpVerification.reason,
+          attemptsRemaining: otpVerification.attemptsRemaining
+        });
+      }
+
+      // Find user and update password
+      const user = await User.findById(otpVerification.userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found"
+        });
+      }
+
+      // Update password (the User model should hash it automatically)
+      user.password = newPassword;
+      await user.save();
+
+      // Mark OTP as used
+      await otpVerification.otpRecord.markUsed();
+
+      logger.info(`Password reset successful for user: ${email}`, {
+        userId: user._id,
+        ip: req.ip,
+        otpId: otpVerification.otpRecord._id
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Password reset successful. You can now login with your new password.",
+        data: {
+          email: user.email,
+          resetAt: new Date()
+        }
+      });
+
+    } catch (error) {
+      logger.error("Reset password error:", error);
+      next(error);
+    }
+  }
+
+  // Verify password reset OTP (optional endpoint for validation)
+  async verifyResetOTP(req, res, next) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { email, otp } = req.body;
+
+      // Verify OTP
+      const otpVerification = await passwordResetService.verifyPasswordResetOTP(email, otp);
+
+      if (!otpVerification.valid) {
+        return res.status(400).json({
+          success: false,
+          message: otpVerification.reason,
+          attemptsRemaining: otpVerification.attemptsRemaining
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "OTP verified successfully. You can now reset your password.",
+        data: {
+          email: email,
+          timeRemaining: otpVerification.timeRemaining,
+          validUntil: otpVerification.otpRecord.expiresAt
+        }
+      });
+
+    } catch (error) {
+      logger.error("Verify reset OTP error:", error);
       next(error);
     }
   }

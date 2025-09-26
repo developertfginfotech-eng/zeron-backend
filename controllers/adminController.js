@@ -7,6 +7,7 @@ const { validationResult } = require("express-validator");
 const mongoose = require("mongoose");
 const logger = require("../utils/logger");
 const otpEmailService = require("../utils/otpEmailService");
+const notificationService = require("../utils/notificationService");
 const fs = require("fs");
 
 class AdminController {
@@ -944,6 +945,15 @@ try {
 
     console.log(`Property created by admin - Value: ${propertyData.financials.totalValue}`);
 
+    // Send notification to all admins about new property creation
+    try {
+      await notificationService.notifyNewPropertyAdded(property._id, user._id);
+      logger.info(`Admin notifications sent for new property: ${property.title}`);
+    } catch (notificationError) {
+      logger.error('Failed to send property creation notifications:', notificationError);
+      // Continue without failing the property creation
+    }
+
     res.status(201).json({
       success: true,
       message: "Property created successfully",
@@ -1857,274 +1867,6 @@ try {
   }
 
   
-
-// async createProperty(req, res) {
-//   try {
-//     console.log("=== CREATE PROPERTY WITH DATABASE OTP ===");
-//     console.log("Body:", req.body);
-//     console.log("Files:", req.files);
-
-//     const userId = req.user.id;
-
-//     // Add null check for user
-//     const user = await User.findById(userId);
-//     if (!user) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "User not found. Please log in again.",
-//       });
-//     }
-
-//     console.log("User found:", {
-//       id: user._id,
-//       email: user.email,
-//       role: user.role,
-//     });
-
-//     // Extract fields from request
-//     const {
-//       title,
-//       description,
-//       location,
-//       propertyType,
-//       financials,
-//       status,
-//       otp,
-//     } = req.body;
-
-//     // Parse JSON fields
-//     let parsedLocation = {};
-//     let parsedFinancials = {};
-
-//     try {
-//       parsedLocation =
-//         typeof location === "string" ? JSON.parse(location) : location || {};
-//       parsedFinancials =
-//         typeof financials === "string"
-//           ? JSON.parse(financials)
-//           : financials || {};
-//     } catch (parseError) {
-//       console.error("Error parsing JSON fields:", parseError);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid JSON in location or financials fields",
-//       });
-//     }
-
-//     // Enhanced validation for financials
-//     if (parsedFinancials.totalValue !== undefined) {
-//       const totalValue = Number(parsedFinancials.totalValue);
-      
-//       if (isNaN(totalValue)) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Property total value must be a valid number",
-//         });
-//       }
-
-//       if (totalValue < 100000) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Property total value must be at least ₹1,00,000",
-//           validation: {
-//             field: "financials.totalValue",
-//             minimum: 100000,
-//             received: totalValue,
-//           },
-//         });
-//       }
-
-//       // Additional financial validations
-//       if (parsedFinancials.expectedReturn !== undefined) {
-//         const expectedReturn = Number(parsedFinancials.expectedReturn);
-//         if (isNaN(expectedReturn) || expectedReturn < 0 || expectedReturn > 100) {
-//           return res.status(400).json({
-//             success: false,
-//             message: "Expected return must be between 0% and 100%",
-//           });
-//         }
-//       }
-
-//       if (parsedFinancials.minimumInvestment !== undefined) {
-//         const minInvestment = Number(parsedFinancials.minimumInvestment);
-//         if (isNaN(minInvestment) || minInvestment < 1000) {
-//           return res.status(400).json({
-//             success: false,
-//             message: "Minimum investment must be at least ₹1,000",
-//           });
-//         }
-
-//         if (minInvestment > totalValue) {
-//           return res.status(400).json({
-//             success: false,
-//             message: "Minimum investment cannot exceed total property value",
-//           });
-//         }
-//       }
-//     }
-
-//     // Validate title
-//     if (!title || title.trim().length === 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Property title is required",
-//       });
-//     }
-
-//     if (title.length > 200) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Property title cannot exceed 200 characters",
-//       });
-//     }
-
-//     // If OTP is not provided, send OTP and return
-//     if (!otp) {
-//       try {
-//         console.log("Sending OTP for user:", user._id);
-
-//         const emailResult = await otpEmailService.sendOTP({
-//           operation: "create",
-//           propertyData: { title, propertyType },
-//           adminUser: user,
-//           propertyId: null,
-//         });
-
-//         console.log("OTP sent for create operation:", emailResult.otpId);
-
-//         return res.status(200).json({
-//           success: true,
-//           message: "OTP sent successfully",
-//           data: {
-//             step: "otp_required",
-//             message: emailResult.fallbackMode
-//               ? "Check console for OTP code (email service unavailable)"
-//               : "Check your email for OTP code",
-//             expiresIn: "10 minutes",
-//             sentTo: emailResult.sentTo,
-//             otpId: emailResult.otpId,
-//           },
-//         });
-//       } catch (otpError) {
-//         console.error("OTP sending failed:", otpError);
-//         logger.error("OTP sending failed:", otpError);
-//         return res.status(500).json({
-//           success: false,
-//           message: "Failed to send OTP. Please try again.",
-//           error:
-//             process.env.NODE_ENV === "development"
-//               ? otpError.message
-//               : undefined,
-//         });
-//       }
-//     }
-
-//     // If OTP is provided, verify it
-//     if (otp) {
-//       const verification = await otpEmailService.verifyOTP(
-//         userId,
-//         otp,
-//         "create"
-//       );
-
-//       if (!verification.valid) {
-//         return res.status(400).json({
-//           success: false,
-//           message: verification.reason,
-//           attemptsRemaining: verification.attemptsRemaining,
-//         });
-//       }
-
-//       console.log(
-//         `OTP verified successfully for create operation - User: ${userId}`
-//       );
-//       logger.info(
-//         `OTP verified successfully for create operation - User: ${userId}, OTP ID: ${verification.otpRecord._id}`
-//       );
-//     }
-
-//     // Continue with property creation after validation and OTP verification
-//     const propertyData = {
-//       title: title.trim(),
-//       description: description || "",
-//       location: parsedLocation,
-//       financials: {
-//         ...parsedFinancials,
-//         totalValue: Number(parsedFinancials.totalValue) || 0,
-//         expectedReturn: Number(parsedFinancials.expectedReturn) || 0,
-//         minimumInvestment: Number(parsedFinancials.minimumInvestment) || 1000,
-//       },
-//       propertyType: propertyType || "residential",
-//       status: status || "active",
-//       images: [],
-//       timeline: {
-//         launchDate: new Date(),
-//         fundingDeadline: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-//       },
-//       createdBy: userId,
-//       createdAt: new Date(),
-//       updatedAt: new Date(),
-//     };
-
-//     // Handle image uploads if any
-//     if (req.files && req.files.length > 0) {
-//       propertyData.images = req.files.map((file, index) => ({
-//         url: `/uploads/${file.filename}`,
-//         alt: `${title} - Image ${index + 1}`,
-//         isPrimary: index === 0,
-//         _id: new mongoose.Types.ObjectId(),
-//       }));
-//     }
-
-//     // Create the property
-//     const property = new Property(propertyData);
-//     await property.save();
-
-//     logger.info(
-//       `Property created successfully - ID: ${property._id}, Title: ${property.title}, Created by: ${userId}`
-//     );
-
-//     res.status(201).json({
-//       success: true,
-//       message: "Property created successfully",
-//       data: {
-//         id: property._id,
-//         title: property.title,
-//         status: property.status,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Create property error:", error);
-    
-//     // Handle mongoose validation errors more gracefully
-//     if (error.name === 'ValidationError') {
-//       const validationErrors = Object.keys(error.errors).map(key => ({
-//         field: key,
-//         message: error.errors[key].message,
-//         value: error.errors[key].value,
-//       }));
-
-//       return res.status(400).json({
-//         success: false,
-//         message: "Property validation failed",
-//         validationErrors: validationErrors,
-//       });
-//     }
-
-//     logger.error("Create property error:", {
-//       error: error.message,
-//       stack: error.stack,
-//       userId: req.user?.id,
-//     });
-
-//     res.status(500).json({
-//       success: false,
-//       message: "Error creating property",
-//       error:
-//         process.env.NODE_ENV === "development" ? error.message : undefined,
-//     });
-//   }
-// }
 
   async updateProperty(req, res) {
     try {

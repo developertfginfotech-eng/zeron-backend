@@ -2,6 +2,7 @@ const KYC = require('../models/KYC');
 const User = require('../models/User');
 const path = require('path');
 const logger = require('../utils/logger');
+const notificationService = require('../utils/notificationService');
 
 class KYCController {
   async uploadDocuments(req, res, next) {
@@ -343,6 +344,20 @@ class KYCController {
       await kyc.save();
 
       logger.info(`KYC status updated: ${kycId} -> ${status} by admin ${reviewedBy}`);
+
+      // Send notification based on status
+      try {
+        if (status === 'approved') {
+          await notificationService.notifyKYCApproved(kyc.user);
+          logger.info(`KYC approved notification sent to user: ${kyc.user}`);
+        } else if (status === 'rejected') {
+          await notificationService.notifyKYCRejected(kyc.user, rejectionReason);
+          logger.info(`KYC rejected notification sent to user: ${kyc.user}`);
+        }
+      } catch (notificationError) {
+        logger.error('Failed to send KYC status notification:', notificationError);
+        // Continue without failing the KYC update
+      }
 
       res.json({
         success: true,
