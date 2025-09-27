@@ -148,8 +148,9 @@ class UserController {
   async getCurrentUserPortfolio(req, res) {
     try {
       const userId = req.user.id;
-      return this.getPortfolioData(userId, res);
+      return await this.getPortfolioData(userId, res);
     } catch (error) {
+      logger.error('Get current user portfolio error:', error);
       res.status(500).json({
         success: false,
         message: 'Error fetching portfolio',
@@ -170,7 +171,7 @@ class UserController {
       }
 
       const { id } = req.params;
-      
+
       if (req.user.id !== id && !['admin', 'super_admin'].includes(req.user.role)) {
         return res.status(403).json({
           success: false,
@@ -178,8 +179,9 @@ class UserController {
         });
       }
 
-      return this.getPortfolioData(id, res);
+      return await this.getPortfolioData(id, res);
     } catch (error) {
+      logger.error('Get user portfolio error:', error);
       res.status(500).json({
         success: false,
         message: 'Error fetching portfolio',
@@ -218,7 +220,7 @@ class UserController {
       const monthlyPerformance = await Investment.aggregate([
         {
           $match: {
-            user: mongoose.Types.ObjectId(userId),
+            user: new mongoose.Types.ObjectId(userId),
             status: 'confirmed',
             createdAt: {
               $gte: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
@@ -353,4 +355,13 @@ class UserController {
   }
 }
 
-module.exports = new UserController();
+const userController = new UserController();
+
+module.exports = {
+  getProfile: userController.getProfile.bind(userController),
+  updateProfile: userController.updateProfile.bind(userController),
+  getCurrentKycStatus: userController.getCurrentKycStatus.bind(userController),
+  getCurrentUserPortfolio: userController.getCurrentUserPortfolio.bind(userController),
+  getUserPortfolio: userController.getUserPortfolio.bind(userController),
+  getKycStatus: userController.getKycStatus.bind(userController)
+};

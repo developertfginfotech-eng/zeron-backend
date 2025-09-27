@@ -92,8 +92,8 @@ investmentSchema.statics.findByUser = function(userId) {
 investmentSchema.statics.getUserPortfolioSummary = function(userId) {
   return this.aggregate([
     {
-      $match: { 
-        user: mongoose.Types.ObjectId(userId), 
+      $match: {
+        user: new mongoose.Types.ObjectId(userId),
         status: 'confirmed'
       }
     },

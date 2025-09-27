@@ -101,6 +101,9 @@ router.delete('/properties/:id', authorize('super_admin', 'property_manager'), a
 // Get admin dashboard data
 router.get('/dashboard', adminController.getDashboard);
 
+// Get active investors list
+router.get('/investors', adminController.getActiveInvestors);
+
 // Get OTP status for current user
 router.get('/otp-status', adminController.getOTPStatus);
 

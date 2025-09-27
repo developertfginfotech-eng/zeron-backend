@@ -2552,5 +2552,208 @@ try {
     }
   }
 
+  async getActiveInvestors(req, res) {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        sort = "-createdAt",
+        search,
+        propertyId
+      } = req.query;
+
+      // Build aggregation pipeline
+      const pipeline = [
+        {
+          $match: {
+            status: "confirmed"
+          }
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "investor"
+          }
+        },
+        {
+          $lookup: {
+            from: "properties",
+            localField: "property",
+            foreignField: "_id",
+            as: "propertyDetails"
+          }
+        },
+        {
+          $unwind: "$investor"
+        },
+        {
+          $unwind: "$propertyDetails"
+        }
+      ];
+
+      // Add property filter if specified
+      if (propertyId) {
+        pipeline[0].$match.property = mongoose.Types.ObjectId(propertyId);
+      }
+
+      // Add search filter if specified
+      if (search) {
+        pipeline.push({
+          $match: {
+            $or: [
+              { "investor.firstName": { $regex: search, $options: "i" } },
+              { "investor.lastName": { $regex: search, $options: "i" } },
+              { "investor.email": { $regex: search, $options: "i" } },
+              { "propertyDetails.title": { $regex: search, $options: "i" } }
+            ]
+          }
+        });
+      }
+
+      // Group by investor to get their total investments
+      pipeline.push(
+        {
+          $group: {
+            _id: "$investor._id",
+            investor: { $first: "$investor" },
+            totalInvestments: { $sum: "$amount" },
+            totalReturns: { $sum: "$returns.totalReturnsReceived" },
+            investmentCount: { $sum: 1 },
+            properties: {
+              $push: {
+                propertyId: "$property",
+                propertyTitle: "$propertyDetails.title",
+                amount: "$amount",
+                date: "$createdAt",
+                returns: "$returns.totalReturnsReceived"
+              }
+            },
+            firstInvestment: { $min: "$createdAt" },
+            lastInvestment: { $max: "$createdAt" }
+          }
+        },
+        {
+          $addFields: {
+            "investor.fullName": {
+              $concat: ["$investor.firstName", " ", "$investor.lastName"]
+            }
+          }
+        }
+      );
+
+      // Add sorting
+      const sortField = sort.startsWith("-") ? sort.substring(1) : sort;
+      const sortDirection = sort.startsWith("-") ? -1 : 1;
+
+      let sortStage = {};
+      if (sortField === "createdAt") {
+        sortStage = { firstInvestment: sortDirection };
+      } else if (sortField === "totalInvestments") {
+        sortStage = { totalInvestments: sortDirection };
+      } else if (sortField === "name") {
+        sortStage = { "investor.firstName": sortDirection };
+      } else {
+        sortStage = { firstInvestment: sortDirection };
+      }
+
+      pipeline.push({ $sort: sortStage });
+
+      // Get total count for pagination
+      const countPipeline = [...pipeline, { $count: "total" }];
+      const [totalResult] = await Investment.aggregate(countPipeline);
+      const totalInvestors = totalResult?.total || 0;
+
+      // Add pagination
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const skip = (pageNum - 1) * limitNum;
+
+      pipeline.push({ $skip: skip }, { $limit: limitNum });
+
+      // Execute the query
+      const investors = await Investment.aggregate(pipeline);
+
+      // Calculate summary statistics
+      const summaryPipeline = [
+        {
+          $match: {
+            status: "confirmed"
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalInvestors: { $addToSet: "$user" },
+            totalInvestmentAmount: { $sum: "$amount" },
+            totalReturnsDistributed: { $sum: "$returns.totalReturnsReceived" },
+            averageInvestment: { $avg: "$amount" }
+          }
+        },
+        {
+          $addFields: {
+            uniqueInvestors: { $size: "$totalInvestors" }
+          }
+        }
+      ];
+
+      const [summary] = await Investment.aggregate(summaryPipeline);
+
+      const totalPages = Math.ceil(totalInvestors / limitNum);
+
+      logger.info(
+        `Admin fetched active investors - Admin: ${req.user.id}, Page: ${page}, Total: ${totalInvestors}`
+      );
+
+      res.json({
+        success: true,
+        data: {
+          investors: investors.map(inv => ({
+            id: inv._id,
+            name: inv.investor.fullName,
+            email: inv.investor.email,
+            phone: inv.investor.phone,
+            kycStatus: inv.investor.kycStatus,
+            status: inv.investor.status,
+            totalInvestments: inv.totalInvestments,
+            totalReturns: inv.totalReturns || 0,
+            investmentCount: inv.investmentCount,
+            properties: inv.properties,
+            firstInvestment: inv.firstInvestment,
+            lastInvestment: inv.lastInvestment,
+            joinedDate: inv.investor.createdAt
+          })),
+          pagination: {
+            page: pageNum,
+            pages: totalPages,
+            total: totalInvestors,
+            limit: limitNum,
+            hasNext: pageNum < totalPages,
+            hasPrev: pageNum > 1
+          },
+          summary: {
+            totalUniqueInvestors: summary?.uniqueInvestors || 0,
+            totalInvestmentAmount: summary?.totalInvestmentAmount || 0,
+            totalReturnsDistributed: summary?.totalReturnsDistributed || 0,
+            averageInvestment: summary?.averageInvestment || 0
+          },
+          filters: {
+            search,
+            propertyId
+          }
+        }
+      });
+
+    } catch (error) {
+      logger.error("Get active investors error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching active investors",
+        error: error.message
+      });
+    }
+  }
+
 }
 module.exports = new AdminController();
