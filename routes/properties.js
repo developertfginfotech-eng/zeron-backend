@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 
+// Rate limiters
 const investmentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -24,20 +25,30 @@ const searchLimiter = rateLimit({
   }
 });
 
+// Validation rules
 const investmentValidation = [
   param('id')
     .isMongoId()
     .withMessage('Invalid property ID'),
   body('shares')
+    .optional()
     .isInt({ min: 1 })
-    .withMessage('Shares must be at least 1'),
+    .withMessage('Shares must be at least 1 if provided'),
   body('amount')
-    .isFloat({ min: 1000 })
-    .withMessage('Investment amount must be at least 1,000 SAR'),
+    .optional()
+    .isFloat({ min: 50 })
+    .withMessage('Investment amount must be at least 50 SAR if provided'),
   body('paymentMethod')
     .optional()
-    .isIn(['mada', 'visa', 'mastercard', 'apple_pay', 'samsung_pay'])
-    .withMessage('Invalid payment method')
+    .isIn(['mada', 'visa', 'mastercard', 'apple_pay', 'samsung_pay', 'fake'])
+    .withMessage('Invalid payment method'),
+  // Custom validation to ensure either amount or shares is provided
+  body().custom((value, { req }) => {
+    if (!req.body.amount && !req.body.shares) {
+      throw new Error('Either amount or shares must be provided');
+    }
+    return true;
+  })
 ];
 
 const propertyQueryValidation = [
@@ -71,7 +82,12 @@ const propertyQueryValidation = [
     .withMessage('Invalid property type')
 ];
 
-
+// Routes
+// GET /api/properties - Get all properties
+router.get('/', 
+  propertyQueryValidation,
+  propertyController.getAllProperties
+);
 
 // GET /api/properties/search - Search properties
 router.get('/search', 

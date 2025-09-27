@@ -189,100 +189,115 @@ class UserController {
   }
 
   async getPortfolioData(userId, res) {
-    const investments = await Investment.find({ 
-      user: userId, 
-      status: 'confirmed' 
-    })
-    .populate('property', 'title titleAr location financials images status')
-    .lean();
+    try {
+      const investments = await Investment.find({
+        user: userId,
+        status: 'confirmed'
+      })
+      .populate('property', 'title titleAr location financials images status')
+      .lean();
 
-    const portfolioSummary = await Investment.getUserPortfolioSummary(userId);
-    
-    const summary = portfolioSummary[0] || {
-      totalInvestments: 0,
-      totalCurrentValue: 0,
-      totalReturns: 0,
-      propertyCount: 0
-    };
+      const portfolioSummary = await Investment.getUserPortfolioSummary(userId);
 
-    const totalProfitLoss = summary.totalCurrentValue - summary.totalInvestments;
-    const totalReturn = summary.totalReturns + totalProfitLoss;
-    const totalReturnPercentage = summary.totalInvestments > 0 
-      ? (totalReturn / summary.totalInvestments) * 100 
-      : 0;
+      const summary = portfolioSummary[0] || {
+        totalInvestments: 0,
+        totalCurrentValue: 0,
+        totalReturns: 0,
+        propertyCount: 0
+      };
 
-    const monthlyPerformance = await Investment.aggregate([
-      {
-        $match: { 
-          user: mongoose.Types.ObjectId(userId),
-          status: 'confirmed',
-          createdAt: { 
-            $gte: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000) 
+      // Calculate total shares across all investments
+      const totalShares = investments.reduce((total, inv) => total + inv.shares, 0);
+
+      const totalProfitLoss = summary.totalCurrentValue - summary.totalInvestments;
+      const totalReturn = summary.totalReturns + totalProfitLoss;
+      const totalReturnPercentage = summary.totalInvestments > 0
+        ? (totalReturn / summary.totalInvestments) * 100
+        : 0;
+
+      const monthlyPerformance = await Investment.aggregate([
+        {
+          $match: {
+            user: mongoose.Types.ObjectId(userId),
+            status: 'confirmed',
+            createdAt: {
+              $gte: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' }
+            },
+            totalInvested: { $sum: '$amount' },
+            totalShares: { $sum: '$shares' },
+            totalReturns: { $sum: '$returns.totalReturnsReceived' }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } }
+      ]);
+
+      const portfolioDetails = investments.map(investment => {
+        const currentValue = investment.shares * investment.property.financials.pricePerShare;
+        const profitLoss = currentValue - investment.amount;
+        const profitLossPercentage = (profitLoss / investment.amount) * 100;
+
+        return {
+          investmentId: investment._id,
+          property: {
+            id: investment.property._id,
+            title: investment.property.title,
+            titleAr: investment.property.titleAr,
+            location: investment.property.location,
+            image: investment.property.images?.[0]?.url,
+            status: investment.property.status
+          },
+          investment: {
+            shares: investment.shares,
+            originalAmount: investment.amount,
+            currentValue: currentValue,
+            profitLoss: profitLoss,
+            profitLossPercentage: profitLossPercentage,
+            totalReturnsReceived: investment.returns.totalReturnsReceived,
+            lastReturnDate: investment.returns.lastReturnDate,
+            investmentDate: investment.createdAt
+          }
+        };
+      });
+
+      res.json({
+        success: true,
+        data: {
+          summary: {
+            ...summary,
+            totalShares,
+            totalAmountSpent: summary.totalInvestments,
+            totalProfitLoss,
+            totalReturn,
+            totalReturnPercentage,
+            averageReturn: summary.propertyCount > 0 ? totalReturn / summary.propertyCount : 0
+          },
+          investments: portfolioDetails,
+          performance: {
+            monthly: monthlyPerformance
+          },
+          metadata: {
+            lastUpdated: new Date(),
+            totalProperties: summary.propertyCount,
+            activeInvestments: investments.filter(inv => inv.property.status === 'active').length
           }
         }
-      },
-      {
-        $group: {
-          _id: {
-            year: { $year: '$createdAt' },
-            month: { $month: '$createdAt' }
-          },
-          totalInvested: { $sum: '$amount' },
-          totalReturns: { $sum: '$returns.totalReturnsReceived' }
-        }
-      },
-      { $sort: { '_id.year': 1, '_id.month': 1 } }
-    ]);
-
-    const portfolioDetails = investments.map(investment => {
-      const currentValue = investment.shares * investment.property.financials.pricePerShare;
-      const profitLoss = currentValue - investment.amount;
-      const profitLossPercentage = (profitLoss / investment.amount) * 100;
-
-      return {
-        investmentId: investment._id,
-        property: {
-          id: investment.property._id,
-          title: investment.property.title,
-          titleAr: investment.property.titleAr,
-          location: investment.property.location,
-          image: investment.property.images?.[0]?.url,
-          status: investment.property.status
-        },
-        investment: {
-          shares: investment.shares,
-          originalAmount: investment.amount,
-          currentValue: currentValue,
-          profitLoss: profitLoss,
-          profitLossPercentage: profitLossPercentage,
-          totalReturnsReceived: investment.returns.totalReturnsReceived,
-          lastReturnDate: investment.returns.lastReturnDate,
-          investmentDate: investment.createdAt
-        }
-      };
-    });
-
-    res.json({
-      success: true,
-      data: {
-        summary: {
-          ...summary,
-          totalProfitLoss,
-          totalReturn,
-          totalReturnPercentage,
-          averageReturn: summary.propertyCount > 0 ? totalReturn / summary.propertyCount : 0
-        },
-        investments: portfolioDetails,
-        performance: {
-          monthly: monthlyPerformance
-        },
-        metadata: {
-          lastUpdated: new Date(),
-          totalProperties: summary.propertyCount,
-          activeInvestments: investments.filter(inv => inv.property.status === 'active').length
-        }
-      }
-    });
+      });
+    } catch (error) {
+      logger.error('Get portfolio data error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching portfolio data',
+        error: error.message
+      });
+    }
   }
 
   async getKycStatus(req, res) {

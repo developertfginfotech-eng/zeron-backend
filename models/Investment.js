@@ -15,7 +15,6 @@ const investmentSchema = new mongoose.Schema({
   },
   shares: {
     type: Number,
-    required: true,
     min: 1
   },
   amount: {
@@ -37,20 +36,32 @@ const investmentSchema = new mongoose.Schema({
   paymentDetails: {
     paymentId: {
       type: String,
-      required: true
+      required: false,
+      default: function() {
+        return `fake_payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      }
     },
     paymentMethod: {
       type: String,
-      required: true,
-      enum: ['mada', 'visa', 'mastercard', 'apple_pay', 'samsung_pay']
+      required: false,
+      enum: ['mada', 'visa', 'mastercard', 'apple_pay', 'samsung_pay', 'fake'],
+      default: 'fake'
     },
     transactionId: {
       type: String,
       unique: true,
-      sparse: true
+      sparse: true,
+      default: function() {
+        return `fake_tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      }
     },
     paymentDate: {
-      type: Date
+      type: Date,
+      default: Date.now
+    },
+    isFakePayment: {
+      type: Boolean,
+      default: true
     }
   },
   returns: {

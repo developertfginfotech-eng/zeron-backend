@@ -224,93 +224,118 @@ class PropertyController {
       });
     }
   }
+async investInProperty(req, res) {
+  const session = await mongoose.startSession();
+  
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
 
-  async investInProperty(req, res) {
-    const session = await mongoose.startSession();
-    
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation errors',
-          errors: errors.array()
-        });
+    await session.withTransaction(async () => {
+      const { id } = req.params;
+      const { amount, shares, paymentMethod = 'mada' } = req.body;
+      const userId = req.user.id;
+
+      const property = await Property.findById(id).session(session);
+      if (!property || property.status !== 'active') {
+        throw new Error('Property not available for investment');
       }
 
-      await session.withTransaction(async () => {
-        const { id } = req.params;
-        const { shares, amount, paymentMethod = 'mada' } = req.body;
-        const userId = req.user.id;
+      // Debug: Log property financials
+      console.log('Property financials:', JSON.stringify(property.financials, null, 2));
 
-        const property = await Property.findById(id).session(session);
-        if (!property || property.status !== 'active') {
-          throw new Error('Property not available for investment');
+      // FIXED: Auto-calculate shares from amount
+      let calculatedShares;
+      let finalAmount;
+
+      if (shares) {
+        // If shares provided, validate
+        calculatedShares = shares;
+        finalAmount = shares * property.financials.pricePerShare;
+
+        if (amount && Math.abs(amount - finalAmount) > 0.01) {
+          throw new Error(`Amount mismatch: ${shares} shares = ${finalAmount} SAR`);
+        }
+      } else {
+        // Auto-calculate shares from amount
+        if (!amount || amount < property.financials.minInvestment) {
+          throw new Error(`Minimum investment: ${property.financials.minInvestment} SAR`);
         }
 
-        // Check available shares
-        if (shares > property.financials.availableShares) {
-          throw new Error(`Only ${property.financials.availableShares} shares available`);
+        if (!property.financials.pricePerShare || property.financials.pricePerShare <= 0) {
+          throw new Error(`Invalid price per share: ${property.financials.pricePerShare}. Property needs to have a valid price per share set.`);
         }
-
-        // Validate amount calculation
-        const expectedAmount = shares * property.financials.pricePerShare;
-        if (Math.abs(amount - expectedAmount) > 0.01) {
-          throw new Error('Investment amount does not match share calculation');
+        
+        calculatedShares = Math.floor(amount / property.financials.pricePerShare);
+        
+        if (calculatedShares < 1) {
+          throw new Error(
+            `Investment amount too low. Minimum ${property.financials.pricePerShare} SAR per share. ` +
+            `You need at least ${property.financials.pricePerShare} SAR to buy 1 share.`
+          );
         }
+        
+        finalAmount = calculatedShares * property.financials.pricePerShare;
+      }
 
-        // Check user KYC
-        const user = await User.findById(userId).session(session);
-        if (user.kycStatus !== 'approved') {
-          throw new Error('KYC verification required');
-        }
+      // Check available shares
+      if (calculatedShares > property.financials.availableShares) {
+        throw new Error(`Only ${property.financials.availableShares} shares available`);
+      }
 
-        // Create investment
-        const investment = new Investment({
-          user: userId,
-          property: id,
-          shares,
-          amount,
+      // Rest of your code...
+      const user = await User.findById(userId).session(session);
+      if (user.kycStatus !== 'approved') {
+        throw new Error('KYC verification required');
+      }
+
+      const investment = new Investment({
+        user: userId,
+        property: id,
+        shares: calculatedShares,
+        amount: finalAmount,
+        pricePerShare: property.financials.pricePerShare,
+        paymentDetails: {
+          paymentMethod: 'fake',
+          isFakePayment: true
+        },
+        status: 'confirmed'
+      });
+
+      property.financials.availableShares -= calculatedShares;
+      property.investorCount += 1;
+
+      await Promise.all([
+        investment.save({ session }),
+        property.save({ session })
+      ]);
+
+      res.json({
+        success: true,
+        message: 'Investment successful',
+        data: {
+          investmentId: investment._id,
+          shares: calculatedShares,
+          amountInvested: finalAmount,
           pricePerShare: property.financials.pricePerShare,
-          paymentDetails: {
-            paymentId: `PAY_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            paymentMethod,
-            transactionId: `TXN_${Date.now()}`
-          },
-          status: 'confirmed' // In real app, this would be 'pending' until payment confirmation
-        });
-
-        // Update property
-        property.financials.availableShares -= shares;
-        property.investorCount += 1;
-
-        // Save changes
-        await Promise.all([
-          investment.save({ session }),
-          property.save({ session })
-        ]);
-
-        res.json({
-          success: true,
-          message: 'Investment successful',
-          data: {
-            investmentId: investment._id,
-            transactionId: investment.paymentDetails.transactionId,
-            shares,
-            amount,
-            remainingShares: property.financials.availableShares
-          }
-        });
+          remainingShares: property.financials.availableShares
+        }
       });
-    } catch (error) {
-      res.status(400).json({
-        success: false,
-        message: error.message || 'Investment failed'
-      });
-    } finally {
-      await session.endSession();
-    }
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Investment failed'
+    });
+  } finally {
+    await session.endSession();
   }
 }
-
+}
 module.exports = new PropertyController();
