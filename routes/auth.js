@@ -91,10 +91,10 @@ const verifyOTPValidation = [
     .withMessage('OTP must be 6 digits')
 ];
 
-// Rate limiter for password reset requests
+
 const passwordResetLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Allow 5 password reset attempts per 15 minutes
+  windowMs: 15 * 60 * 1000,
+  max: 5, 
   message: {
     success: false,
     message: 'Too many password reset attempts, please try again later.'
@@ -104,7 +104,6 @@ const passwordResetLimiter = rateLimit({
 router.post('/register',upload.none(), registerLimiter, registerValidation, authController.register);
 router.post('/login', upload.none(), authLimiter, loginValidation, authController.login);
 
-// Password reset routes
 router.post('/forgot-password', upload.none(), passwordResetLimiter, forgotPasswordValidation, authController.forgotPassword);
 router.post('/reset-password', upload.none(), passwordResetLimiter, resetPasswordValidation, authController.resetPassword);
 router.post('/verify-reset-otp', upload.none(), authLimiter, verifyOTPValidation, authController.verifyResetOTP);

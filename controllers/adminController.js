@@ -2331,7 +2331,6 @@ try {
     }
   }
 
-  // Reports Methods
   async getEarningsReport(req, res) {
     try {
       const errors = validationResult(req);
@@ -2551,6 +2550,7 @@ try {
       });
     }
   }
+   
 
   async getActiveInvestors(req, res) {
     try {
@@ -2562,7 +2562,6 @@ try {
         propertyId
       } = req.query;
 
-      // Build aggregation pipeline
       const pipeline = [
         {
           $match: {
@@ -2593,12 +2592,10 @@ try {
         }
       ];
 
-      // Add property filter if specified
       if (propertyId) {
         pipeline[0].$match.property = mongoose.Types.ObjectId(propertyId);
       }
 
-      // Add search filter if specified
       if (search) {
         pipeline.push({
           $match: {
@@ -2612,7 +2609,6 @@ try {
         });
       }
 
-      // Group by investor to get their total investments
       pipeline.push(
         {
           $group: {
@@ -2643,7 +2639,7 @@ try {
         }
       );
 
-      // Add sorting
+      
       const sortField = sort.startsWith("-") ? sort.substring(1) : sort;
       const sortDirection = sort.startsWith("-") ? -1 : 1;
 

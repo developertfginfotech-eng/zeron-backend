@@ -36,7 +36,18 @@ class UserController {
           kycStatus: user.kycStatus,
           emailVerified: user.emailVerified,
           kycUpdated: user.kycStatus === 'approved',
-          canInvest: user.status === 'active' && user.kycStatus === 'approved' && user.emailVerified
+          canInvest: user.status === 'active' && user.kycStatus === 'approved' && user.emailVerified,
+          wallet: {
+            totalUnitsOwned: user.wallet?.totalUnitsOwned || 0,
+            totalInvested: user.wallet?.totalInvested || 0,
+            totalReturns: user.wallet?.totalReturns || 0
+          },
+          investmentSummary: {
+            totalInvested: user.investmentSummary?.totalInvested || 0,
+            totalReturns: user.investmentSummary?.totalReturns || 0,
+            propertyCount: user.investmentSummary?.propertyCount || 0,
+            lastInvestmentDate: user.investmentSummary?.lastInvestmentDate || null
+          }
         }
       });
 

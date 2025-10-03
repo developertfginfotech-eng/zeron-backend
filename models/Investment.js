@@ -15,12 +15,13 @@ const investmentSchema = new mongoose.Schema({
   },
   shares: {
     type: Number,
+    required: true,
     min: 1
   },
   amount: {
     type: Number,
     required: true,
-    min: 1000
+    min: 0
   },
   pricePerShare: {
     type: Number,

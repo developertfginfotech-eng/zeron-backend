@@ -115,9 +115,8 @@ router.get('/reports/earnings', authorize('super_admin', 'financial_analyst'), [
   query('format').optional().isIn(['json', 'csv']).withMessage('Format must be json or csv')
 ], adminController.getEarningsReport);
 
-// ========== LEGACY ROUTES (for backward compatibility) ==========
 
-// Create admin user (deprecated - use promote-user instead)
+
 router.post('/admin-users', authorize('super_admin'), [
   body('firstName').trim().isLength({ min: 2 }),
   body('lastName').trim().isLength({ min: 2 }),

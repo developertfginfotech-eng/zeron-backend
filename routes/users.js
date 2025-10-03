@@ -77,7 +77,7 @@ router.get('/:id/portfolio',
 );
 
 // GET /api/users/:id/kyc-status - Get user's KYC status
-router.get('/:id/kyc-status', 
+router.get('/:id/kyc-status',
   authenticate,
   userIdValidation,
   userController.getKycStatus

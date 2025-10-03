@@ -276,7 +276,6 @@ class AuthController {
     }
   }
 
-  // Verify password reset OTP (optional endpoint for validation)
   async verifyResetOTP(req, res, next) {
     try {
       const errors = validationResult(req);

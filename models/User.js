@@ -59,7 +59,6 @@ const userSchema = new mongoose.Schema({
     enum: ['ar', 'en'],
     default: 'ar'
   },
-  // ADD THESE MISSING FIELDS FOR PORTFOLIO FUNCTIONALITY
   address: {
     street: {
       type: String,
@@ -84,6 +83,11 @@ const userSchema = new mongoose.Schema({
   },
   wallet: {
     balance: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    totalUnitsOwned: {
       type: Number,
       default: 0,
       min: 0

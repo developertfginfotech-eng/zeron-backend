@@ -62,10 +62,9 @@ class PropertyController {
     const { id } = req.params;
     console.log('Requested property ID:', id);
 
-    const user = req.user; // comes from authenticate middleware
+    const user = req.user; 
     console.log('User from middleware:', user);
 
-    // Fetch property from DB
     const property = await Property.findById(id)
       .select('title titleAr location images status financials analytics fundingProgress createdBy isActive')
       .populate('createdBy', 'firstName lastName email')
@@ -78,7 +77,6 @@ class PropertyController {
       return res.status(404).json({ success: false, message: 'Property not found' });
     }
 
-    // If user KYC not approved → return partial info
     if (!user || user.kycStatus !== 'approved') {
       console.log('KYC not approved');
       return res.status(403).json({
@@ -95,11 +93,9 @@ class PropertyController {
       });
     }
 
-    // Increment views for approved users
     await Property.findByIdAndUpdate(id, { $inc: { 'analytics.views': 1 } });
     console.log('Views incremented for property');
 
-    // Return full property details
     res.json({
       success: true,
       data: property
@@ -141,7 +137,6 @@ class PropertyController {
 
       let aggregationPipeline = [];
 
-      // Match stage
       const matchStage = {
         isActive: true,
         status: { $in: ['active', 'fully_funded'] }
@@ -156,14 +151,12 @@ class PropertyController {
 
       aggregationPipeline.push({ $match: matchStage });
 
-      // Add relevance score for text search
       if (q) {
         aggregationPipeline.push({
           $addFields: { relevanceScore: { $meta: 'textScore' } }
         });
       }
 
-      // Sort stage
       let sortStage = {};
       if (q && sortBy === 'relevance') {
         sortStage = { relevanceScore: { $meta: 'textScore' } };
@@ -188,7 +181,6 @@ class PropertyController {
 
       aggregationPipeline.push({ $sort: sortStage });
 
-      // Pagination
       aggregationPipeline.push({
         $facet: {
           data: [
@@ -226,7 +218,7 @@ class PropertyController {
   }
 async investInProperty(req, res) {
   const session = await mongoose.startSession();
-  
+
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -239,7 +231,7 @@ async investInProperty(req, res) {
 
     await session.withTransaction(async () => {
       const { id } = req.params;
-      const { amount, shares, paymentMethod = 'mada' } = req.body;
+      const { units, shares, paymentMethod = 'mada' } = req.body;
       const userId = req.user.id;
 
       const property = await Property.findById(id).session(session);
@@ -247,59 +239,45 @@ async investInProperty(req, res) {
         throw new Error('Property not available for investment');
       }
 
-      // Debug: Log property financials
       console.log('Property financials:', JSON.stringify(property.financials, null, 2));
 
-      // FIXED: Auto-calculate shares from amount
-      let calculatedShares;
-      let finalAmount;
+      const requestedUnits = units || shares;
 
-      if (shares) {
-        // If shares provided, validate
-        calculatedShares = shares;
-        finalAmount = shares * property.financials.pricePerShare;
-
-        if (amount && Math.abs(amount - finalAmount) > 0.01) {
-          throw new Error(`Amount mismatch: ${shares} shares = ${finalAmount} SAR`);
-        }
-      } else {
-        // Auto-calculate shares from amount
-        if (!amount || amount < property.financials.minInvestment) {
-          throw new Error(`Minimum investment: ${property.financials.minInvestment} SAR`);
-        }
-
-        if (!property.financials.pricePerShare || property.financials.pricePerShare <= 0) {
-          throw new Error(`Invalid price per share: ${property.financials.pricePerShare}. Property needs to have a valid price per share set.`);
-        }
-        
-        calculatedShares = Math.floor(amount / property.financials.pricePerShare);
-        
-        if (calculatedShares < 1) {
-          throw new Error(
-            `Investment amount too low. Minimum ${property.financials.pricePerShare} SAR per share. ` +
-            `You need at least ${property.financials.pricePerShare} SAR to buy 1 share.`
-          );
-        }
-        
-        finalAmount = calculatedShares * property.financials.pricePerShare;
+      if (!requestedUnits || requestedUnits < 1) {
+        throw new Error('Units/shares are required. Please specify how many units you want to purchase.');
       }
 
-      // Check available shares
-      if (calculatedShares > property.financials.availableShares) {
-        throw new Error(`Only ${property.financials.availableShares} shares available`);
+      if (!property.financials.pricePerShare || property.financials.pricePerShare <= 0) {
+        throw new Error(`Invalid price per share: ${property.financials.pricePerShare}. Property needs to have a valid price per share set.`);
       }
 
-      // Rest of your code...
+      // Calculate total amount based on units
+      const totalAmount = requestedUnits * property.financials.pricePerShare;
+
+      // Check if user can afford the minimum investment
+      const minUnitsRequired = Math.ceil(property.financials.minInvestment / property.financials.pricePerShare);
+      if (requestedUnits < minUnitsRequired) {
+        throw new Error(
+          `Minimum investment requires ${minUnitsRequired} units (${property.financials.minInvestment} SAR). ` +
+          `You requested ${requestedUnits} units (${totalAmount} SAR).`
+        );
+      }
+
+      if (requestedUnits > property.financials.availableShares) {
+        throw new Error(`Only ${property.financials.availableShares} units available`);
+      }
+
       const user = await User.findById(userId).session(session);
       if (user.kycStatus !== 'approved') {
         throw new Error('KYC verification required');
       }
 
+      // Create investment - user is buying units directly from the property
       const investment = new Investment({
         user: userId,
         property: id,
-        shares: calculatedShares,
-        amount: finalAmount,
+        shares: requestedUnits,
+        amount: totalAmount,
         pricePerShare: property.financials.pricePerShare,
         paymentDetails: {
           paymentMethod: 'fake',
@@ -308,23 +286,59 @@ async investInProperty(req, res) {
         status: 'confirmed'
       });
 
-      property.financials.availableShares -= calculatedShares;
-      property.investorCount += 1;
+      // Update user's wallet
+      user.wallet.totalUnitsOwned = (user.wallet.totalUnitsOwned || 0) + requestedUnits;
+      user.wallet.totalInvested = (user.wallet.totalInvested || 0) + totalAmount;
+
+      // Update investment summary
+      user.investmentSummary.totalInvested = (user.investmentSummary.totalInvested || 0) + totalAmount;
+      user.investmentSummary.lastInvestmentDate = new Date();
+
+      // Save investment first
+      await investment.save({ session });
+
+      // Count unique properties user has invested in
+      const uniqueProperties = await Investment.distinct('property', {
+        user: userId,
+        status: 'confirmed'
+      }).session(session);
+
+      user.investmentSummary.propertyCount = uniqueProperties.length;
+
+      // Check if this is user's first investment in this property for investor count
+      const investmentsInThisProperty = await Investment.countDocuments({
+        user: userId,
+        property: id,
+        status: 'confirmed'
+      }).session(session);
+
+      const isNewInvestor = investmentsInThisProperty === 1; // Only 1 means this is the first
+
+      // Deduct units from property's available shares
+      property.financials.availableShares -= requestedUnits;
+      if (isNewInvestor) {
+        property.investorCount += 1;
+      }
 
       await Promise.all([
-        investment.save({ session }),
-        property.save({ session })
+        property.save({ session }),
+        user.save({ session })
       ]);
 
       res.json({
         success: true,
-        message: 'Investment successful',
+        message: `Successfully purchased ${requestedUnits} units`,
         data: {
           investmentId: investment._id,
-          shares: calculatedShares,
-          amountInvested: finalAmount,
-          pricePerShare: property.financials.pricePerShare,
-          remainingShares: property.financials.availableShares
+          unitsPurchased: requestedUnits,
+          totalAmountPaid: totalAmount,
+          pricePerUnit: property.financials.pricePerShare,
+          propertyRemainingUnits: property.financials.availableShares,
+          userSummary: {
+            totalUnitsOwned: user.wallet.totalUnitsOwned,
+            totalInvested: user.wallet.totalInvested,
+            propertyCount: user.investmentSummary.propertyCount
+          }
         }
       });
     });

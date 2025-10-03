@@ -30,22 +30,22 @@ const investmentValidation = [
   param('id')
     .isMongoId()
     .withMessage('Invalid property ID'),
+  body('units')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Units must be at least 1'),
   body('shares')
     .optional()
     .isInt({ min: 1 })
-    .withMessage('Shares must be at least 1 if provided'),
-  body('amount')
-    .optional()
-    .isFloat({ min: 50 })
-    .withMessage('Investment amount must be at least 50 SAR if provided'),
+    .withMessage('Shares must be at least 1'),
   body('paymentMethod')
     .optional()
     .isIn(['mada', 'visa', 'mastercard', 'apple_pay', 'samsung_pay', 'fake'])
     .withMessage('Invalid payment method'),
-  // Custom validation to ensure either amount or shares is provided
+  // Custom validation to ensure either units or shares is provided
   body().custom((value, { req }) => {
-    if (!req.body.amount && !req.body.shares) {
-      throw new Error('Either amount or shares must be provided');
+    if (!req.body.units && !req.body.shares) {
+      throw new Error('Units or shares must be provided');
     }
     return true;
   })
