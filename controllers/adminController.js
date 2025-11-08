@@ -2927,33 +2927,39 @@ try {
         }
       ]);
 
-      // Get withdrawal requests
-      const WithdrawalRequest = require('../models/WithdrawalRequest') || require('../models/Withdrawal');
-      const withdrawalFilter = {};
-      if (startDate || endDate) {
-        withdrawalFilter.requestedAt = {};
-        if (startDate) withdrawalFilter.requestedAt.$gte = new Date(startDate);
-        if (endDate) withdrawalFilter.requestedAt.$lte = new Date(endDate);
-      }
-      if (status) withdrawalFilter.status = status;
+      // Get withdrawal requests (if model exists)
+      let withdrawals = [];
+      let pendingWithdrawals = 0;
 
-      const withdrawals = await WithdrawalRequest.find(withdrawalFilter)
-        .populate('userId', 'email firstName lastName')
-        .sort({ requestedAt: -1 })
-        .skip(offset)
-        .limit(limit)
-        .lean()
-        .catch(() => []);
+      try {
+        const WithdrawalRequest = require('../models/WithdrawalRequest');
+        const withdrawalFilter = {};
+        if (startDate || endDate) {
+          withdrawalFilter.requestedAt = {};
+          if (startDate) withdrawalFilter.requestedAt.$gte = new Date(startDate);
+          if (endDate) withdrawalFilter.requestedAt.$lte = new Date(endDate);
+        }
+        if (status) withdrawalFilter.status = status;
+
+        withdrawals = await WithdrawalRequest.find(withdrawalFilter)
+          .populate('userId', 'email firstName lastName')
+          .sort({ requestedAt: -1 })
+          .skip(offset)
+          .limit(limit)
+          .lean();
+
+        pendingWithdrawals = await WithdrawalRequest.countDocuments({ ...withdrawalFilter, status: 'pending' });
+      } catch (err) {
+        logger.debug('WithdrawalRequest model not available, skipping withdrawals');
+        withdrawals = [];
+        pendingWithdrawals = 0;
+      }
 
       // Calculate summary
       const completedTransactions = await Transaction.aggregate([
         { $match: { ...filter, status: 'completed' } },
-        { $group: { _id: null, total: { $sum: { $toDouble: '$amount' } } } }
+        { $group: { _id: null, total: { $sum: '$amount' } } }
       ]);
-
-      const pendingWithdrawals = withdrawalFilter
-        ? await WithdrawalRequest.countDocuments({ ...withdrawalFilter, status: 'pending' }).catch(() => 0)
-        : 0;
 
       res.json({
         success: true,
@@ -3059,7 +3065,7 @@ try {
               year: { $year: '$createdAt' },
               month: { $month: '$createdAt' }
             },
-            revenue: { $sum: { $toDouble: '$amount' } },
+            revenue: { $sum: '$amount' },
             count: { $sum: 1 }
           }
         },
@@ -3100,7 +3106,7 @@ try {
         {
           $group: {
             _id: null,
-            total: { $sum: { $toDouble: '$amount' } }
+            total: { $sum: '$amount' }
           }
         }
       ]);
@@ -3115,9 +3121,9 @@ try {
         {
           $group: {
             _id: null,
-            totalInvested: { $sum: { $toDouble: '$amount' } },
+            totalInvested: { $sum: '$amount' },
             count: { $sum: 1 },
-            avgAmount: { $avg: { $toDouble: '$amount' } }
+            avgAmount: { $avg: '$amount' }
           }
         }
       ]);
