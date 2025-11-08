@@ -131,14 +131,23 @@ router.post('/',
         pricePerShare = amount; // Adjust price to match amount
       }
 
-      // Get investment settings for rental yield and other rates
-      const investmentSettings = await InvestmentSettings.getActiveSettings();
-      const settings = investmentSettings || {
+      // Get investment settings - use property-specific if set, otherwise use global
+      const globalSettings = await InvestmentSettings.getActiveSettings();
+      const defaultSettings = {
         rentalYieldPercentage: 8, // Default 8% annual
         appreciationRatePercentage: 3, // Default 3% annual
         earlyWithdrawalPenaltyPercentage: 5, // Default 5% penalty
         maturityPeriodYears: 5 // Default 5 years
       };
+
+      const settings = globalSettings || defaultSettings;
+
+      // Use property-specific settings if set (not null)
+      const propertySettings = property.investmentTerms || {};
+      const rentalYield = propertySettings.rentalYieldRate !== null ? propertySettings.rentalYieldRate : settings.rentalYieldPercentage;
+      const appreciation = propertySettings.appreciationRate !== null ? propertySettings.appreciationRate : settings.appreciationRatePercentage;
+      const penalty = propertySettings.earlyWithdrawalPenaltyPercentage !== null ? propertySettings.earlyWithdrawalPenaltyPercentage : settings.earlyWithdrawalPenaltyPercentage;
+      const maturityPeriod = propertySettings.lockingPeriodYears !== null ? propertySettings.lockingPeriodYears : settings.maturityPeriodYears;
 
       // Create investment
       const investment = new Investment({
@@ -152,12 +161,12 @@ router.post('/',
           paymentMethod: 'fake',
           isFakePayment: true
         },
-        rentalYieldRate: settings.rentalYieldPercentage,
-        appreciationRate: settings.appreciationRatePercentage,
-        penaltyRate: settings.earlyWithdrawalPenaltyPercentage,
-        maturityDate: new Date(Date.now() + settings.maturityPeriodYears * 365 * 24 * 60 * 60 * 1000),
-        maturityPeriodYears: settings.maturityPeriodYears,
-        investmentDurationYears: settings.maturityPeriodYears
+        rentalYieldRate: rentalYield,
+        appreciationRate: appreciation,
+        penaltyRate: penalty,
+        maturityDate: new Date(Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000),
+        maturityPeriodYears: maturityPeriod,
+        investmentDurationYears: maturityPeriod
       });
 
       await investment.save();
@@ -197,8 +206,17 @@ router.post('/',
 
       await user.save();
 
-      // Update property
-      property.fundingProgress = Math.min(100, (property.fundingProgress || 0) + (shares / 100));
+      // Update property funding progress based on total investments
+      if (property.financials && property.financials.totalValue && property.financials.totalValue > 0) {
+        // Calculate total invested amount for this property
+        const totalInvested = await Investment.aggregate([
+          { $match: { property: mongoose.Types.ObjectId(propertyId), status: 'confirmed' } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]);
+
+        const investedAmount = totalInvested[0]?.total || 0;
+        property.fundingProgress = Math.min(100, (investedAmount / property.financials.totalValue) * 100);
+      }
       await property.save();
 
       logger.info(`Investment created: User ${userId}, Property ${propertyId}, Amount SAR ${amount}`);

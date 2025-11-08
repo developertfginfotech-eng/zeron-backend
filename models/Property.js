@@ -69,6 +69,16 @@ const propertySchema = new mongoose.Schema({
     fundingDeadline: { type: Date, default: () => new Date(Date.now() + 90*24*60*60*1000) } // 90 days later
   },
 
+  // Property-specific investment settings (overrides global settings)
+  investmentTerms: {
+    targetReturn: { type: Number, default: 0 }, // Target return percentage
+    rentalYieldRate: { type: Number, default: null }, // Annual rental yield %, null = use global setting
+    appreciationRate: { type: Number, default: null }, // Annual appreciation %, null = use global setting
+    lockingPeriodYears: { type: Number, default: null }, // Locking period in years, null = use global setting
+    investmentDurationYears: { type: Number, default: null }, // Investment duration, null = use global setting
+    earlyWithdrawalPenaltyPercentage: { type: Number, default: null } // Penalty %, null = use global setting
+  },
+
   analytics: {
     views: { type: Number, default: 0 },
     favorites: { type: Number, default: 0 }
