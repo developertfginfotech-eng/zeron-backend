@@ -25,13 +25,20 @@ router.get('/my-investments', authenticate, async (req, res) => {
       success: true,
       data: investments.map(inv => ({
         id: inv._id,
+        _id: inv._id,
         propertyId: inv.property._id,
         propertyName: inv.property.title,
         amount: inv.amount,
         shares: inv.shares,
         status: inv.status,
+        createdAt: inv.createdAt,
         investedAt: inv.createdAt,
-        returns: inv.returns.totalReturnsReceived,
+        returns: inv.returns?.totalReturnsReceived || 0,
+        rentalYieldRate: inv.rentalYieldRate || 0,
+        appreciationRate: inv.appreciationRate || 0,
+        penaltyRate: inv.penaltyRate || 0,
+        maturityDate: inv.maturityDate,
+        maturityPeriodYears: inv.maturityPeriodYears || 5,
         property: inv.property
       }))
     });
@@ -124,6 +131,15 @@ router.post('/',
         pricePerShare = amount; // Adjust price to match amount
       }
 
+      // Get investment settings for rental yield and other rates
+      const investmentSettings = await InvestmentSettings.getActiveSettings();
+      const settings = investmentSettings || {
+        rentalYieldPercentage: 8, // Default 8% annual
+        appreciationRatePercentage: 3, // Default 3% annual
+        earlyWithdrawalPenaltyPercentage: 5, // Default 5% penalty
+        maturityPeriodYears: 5 // Default 5 years
+      };
+
       // Create investment
       const investment = new Investment({
         user: userId,
@@ -136,8 +152,12 @@ router.post('/',
           paymentMethod: 'fake',
           isFakePayment: true
         },
-        maturityDate: new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000), // 5 years
-        maturityPeriodYears: 5
+        rentalYieldRate: settings.rentalYieldPercentage,
+        appreciationRate: settings.appreciationRatePercentage,
+        penaltyRate: settings.earlyWithdrawalPenaltyPercentage,
+        maturityDate: new Date(Date.now() + settings.maturityPeriodYears * 365 * 24 * 60 * 60 * 1000),
+        maturityPeriodYears: settings.maturityPeriodYears,
+        investmentDurationYears: settings.maturityPeriodYears
       });
 
       await investment.save();

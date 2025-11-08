@@ -121,20 +121,19 @@ investmentSchema.statics.getUserPortfolioSummary = function(userId) {
       }
     },
     {
-      $lookup: {
-        from: 'properties',
-        localField: 'property',
-        foreignField: '_id',
-        as: 'propertyDetails'
+      $addFields: {
+        // Calculate returns from the investment
+        investmentReturns: {
+          $ifNull: ['$returns.totalReturnsReceived', 0]
+        }
       }
     },
     {
-      $unwind: '$propertyDetails'
-    },
-    {
       $addFields: {
+        // Current value = original amount + returns
+        // This ensures we don't have rounding losses from share calculations
         currentValue: {
-          $multiply: ['$shares', '$propertyDetails.financials.pricePerShare']
+          $add: ['$amount', '$investmentReturns']
         }
       }
     },
@@ -143,7 +142,7 @@ investmentSchema.statics.getUserPortfolioSummary = function(userId) {
         _id: '$user',
         totalInvestments: { $sum: '$amount' },
         totalCurrentValue: { $sum: '$currentValue' },
-        totalReturns: { $sum: '$returns.totalReturnsReceived' },
+        totalReturns: { $sum: '$investmentReturns' },
         propertyCount: { $sum: 1 }
       }
     }
