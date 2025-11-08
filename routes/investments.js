@@ -4,6 +4,7 @@ const InvestmentSettings = require('../models/InvestmentSettings');
 const Investment = require('../models/Investment');
 const Property = require('../models/Property');
 const User = require('../models/User');
+const Transaction = require('../models/Transaction');
 const { authenticate } = require('../middleware/auth');
 const { body, param } = require('express-validator');
 const mongoose = require('mongoose');
@@ -78,10 +79,11 @@ router.post('/',
       }
 
       // Check minimum investment
-      if (amount < property.financials.minInvestment) {
+      const minInvestment = property.financials.minInvestment || 1000;
+      if (amount < minInvestment) {
         return res.status(400).json({
           success: false,
-          message: `Minimum investment is SAR ${property.financials.minInvestment}`
+          message: `Minimum investment is SAR ${minInvestment}`
         });
       }
 
@@ -102,15 +104,24 @@ router.post('/',
         });
       }
 
-      // Calculate shares
-      const pricePerShare = property.financials.pricePerShare || 1000;
-      const shares = Math.floor(amount / pricePerShare);
+      // Calculate shares - based on minimum investment units
+      // If pricePerShare is 0 or not set, use a default calculation
+      let pricePerShare = property.financials.pricePerShare;
+      let shares = 1;
 
+      if (!pricePerShare || pricePerShare <= 0) {
+        // If no price per share, calculate based on min investment
+        // Assume each share unit is worth the minimum investment
+        pricePerShare = minInvestment;
+        shares = Math.floor(amount / minInvestment);
+      } else {
+        shares = Math.floor(amount / pricePerShare);
+      }
+
+      // Ensure at least 1 share
       if (shares < 1) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid share calculation'
-        });
+        shares = 1;
+        pricePerShare = amount; // Adjust price to match amount
       }
 
       // Create investment
@@ -131,8 +142,31 @@ router.post('/',
 
       await investment.save();
 
+      // Get current balance before creating transaction
+      const balanceSummary = await Transaction.getUserBalance(userId);
+      const balanceBefore = (balanceSummary.totalDeposits || 0) -
+                           (balanceSummary.totalWithdrawals || 0) -
+                           (balanceSummary.totalInvestments || 0) +
+                           (balanceSummary.totalPayouts || 0);
+
+      // Create transaction record
+      const transaction = new Transaction({
+        user: userId,
+        type: 'investment',
+        amount: amount,
+        description: `Investment in ${property.title}`,
+        status: 'completed',
+        paymentMethod: 'wallet',
+        relatedEntity: 'property',
+        relatedEntityId: propertyId,
+        balanceBefore: Math.max(balanceBefore, 0),
+        balanceAfter: Math.max(balanceBefore - amount, 0)
+      });
+
+      await transaction.save();
+
       // Update user wallet
-      user.wallet.balance = (user.wallet.balance || 0) - amount;
+      user.wallet.balance = Math.max(balanceBefore - amount, 0);
       user.wallet.totalInvested = (user.wallet.totalInvested || 0) + amount;
       user.investmentSummary.totalInvested = (user.investmentSummary.totalInvested || 0) + amount;
       user.investmentSummary.lastInvestmentDate = new Date();
