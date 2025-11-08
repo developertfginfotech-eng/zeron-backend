@@ -73,6 +73,28 @@ const investmentSchema = new mongoose.Schema({
     lastReturnDate: {
       type: Date
     }
+  },
+  // Investment Terms (snapshot at investment time)
+  maturityDate: {
+    type: Date
+  },
+  exitDate: {
+    type: Date
+  },
+  rentalYieldRate: {
+    type: Number
+  },
+  appreciationRate: {
+    type: Number
+  },
+  penaltyRate: {
+    type: Number
+  },
+  maturityPeriodYears: {
+    type: Number
+  },
+  investmentDurationYears: {
+    type: Number
   }
 }, {
   timestamps: true

@@ -13,6 +13,8 @@ const kycRoutes = require('./routes/kyc');
 const userRoutes = require('./routes/users');
 const adminRoutes = require('./routes/admin');
 const propertyRoutes = require('./routes/properties');
+const investmentRoutes = require('./routes/investments');
+const walletRoutes = require('./routes/wallet');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -20,8 +22,16 @@ const logger = require('./utils/logger');
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
+// Security middleware - Configure helmet to allow images
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "img-src": ["'self'", "data:", "blob:", "*"],
+    },
+  },
+}));
 
 // CORS - Allow all origins
 app.use(cors({
@@ -70,6 +80,8 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/properties', propertyRoutes);
+app.use('/api/investments', investmentRoutes);
+app.use('/api/wallet', walletRoutes);
 
 // Error handling
 app.use('*', (req, res) => {
@@ -121,7 +133,7 @@ async function createDefaultAdmin() {
   }
 }
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
 });
