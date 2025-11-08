@@ -2885,5 +2885,301 @@ try {
     }
   }
 
+  // Get transactions and withdrawal requests
+  async getTransactions(req, res) {
+    try {
+      const { startDate, endDate, status, type, limit = 50, offset = 0 } = req.query;
+
+      // Build filter
+      const filter = {};
+      if (startDate || endDate) {
+        filter.createdAt = {};
+        if (startDate) filter.createdAt.$gte = new Date(startDate);
+        if (endDate) filter.createdAt.$lte = new Date(endDate);
+      }
+      if (status) filter.status = status;
+      if (type) filter.type = type;
+
+      // Get transactions
+      const Transaction = require('../models/Transaction');
+      const User = require('../models/User');
+      const Property = require('../models/Property');
+
+      const transactions = await Transaction.find(filter)
+        .populate('user', 'email firstName lastName')
+        .populate('relatedEntityId')
+        .sort({ createdAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean();
+
+      const totalTransactions = await Transaction.countDocuments(filter);
+
+      // Calculate totals
+      const stats = await Transaction.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+            total: { $sum: { $toDouble: '$amount' } }
+          }
+        }
+      ]);
+
+      // Get withdrawal requests
+      const WithdrawalRequest = require('../models/WithdrawalRequest') || require('../models/Withdrawal');
+      const withdrawalFilter = {};
+      if (startDate || endDate) {
+        withdrawalFilter.requestedAt = {};
+        if (startDate) withdrawalFilter.requestedAt.$gte = new Date(startDate);
+        if (endDate) withdrawalFilter.requestedAt.$lte = new Date(endDate);
+      }
+      if (status) withdrawalFilter.status = status;
+
+      const withdrawals = await WithdrawalRequest.find(withdrawalFilter)
+        .populate('userId', 'email firstName lastName')
+        .sort({ requestedAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean()
+        .catch(() => []);
+
+      // Calculate summary
+      const completedTransactions = await Transaction.aggregate([
+        { $match: { ...filter, status: 'completed' } },
+        { $group: { _id: null, total: { $sum: { $toDouble: '$amount' } } } }
+      ]);
+
+      const pendingWithdrawals = withdrawalFilter
+        ? await WithdrawalRequest.countDocuments({ ...withdrawalFilter, status: 'pending' }).catch(() => 0)
+        : 0;
+
+      res.json({
+        success: true,
+        data: {
+          transactions: transactions.map(t => ({
+            id: t._id,
+            investorId: t.user?._id,
+            investorName: `${t.user?.firstName || ''} ${t.user?.lastName || ''}`.trim() || 'Unknown',
+            investorEmail: t.user?.email,
+            type: t.type,
+            amount: t.amount,
+            fee: t.fee,
+            description: t.description,
+            reference: t.reference,
+            status: t.status,
+            paymentMethod: t.paymentMethod,
+            createdAt: t.createdAt,
+            processedAt: t.processedAt
+          })),
+          withdrawals: withdrawals.map(w => ({
+            id: w._id,
+            userId: w.userId?._id,
+            userName: `${w.userId?.firstName || ''} ${w.userId?.lastName || ''}`.trim() || 'Unknown',
+            userEmail: w.userId?.email,
+            amount: w.amount,
+            reason: w.reason,
+            status: w.status,
+            priority: w.priority,
+            requestedAt: w.requestedAt,
+            reviewedAt: w.reviewedAt
+          })),
+          summary: {
+            totalTransactions,
+            completedAmount: completedTransactions[0]?.total || 0,
+            pendingWithdrawals,
+            totalWithdrawals: withdrawals.length,
+            byStatus: stats.reduce((acc, s) => {
+              acc[s._id] = { count: s.count, amount: s.total };
+              return acc;
+            }, {})
+          },
+          pagination: {
+            offset,
+            limit,
+            total: totalTransactions
+          }
+        }
+      });
+
+    } catch (error) {
+      logger.error("Get transactions error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching transactions",
+        error: error.message
+      });
+    }
+  }
+
+  // Get analytics and platform insights
+  async getAnalytics(req, res) {
+    try {
+      const { startDate, endDate, range = '30days' } = req.query;
+
+      // Calculate date range
+      const now = new Date();
+      let start = startDate ? new Date(startDate) : new Date(now);
+      let end = endDate ? new Date(endDate) : new Date(now);
+
+      if (!startDate) {
+        switch (range) {
+          case '7days':
+            start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case '30days':
+            start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            break;
+          case '90days':
+            start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            break;
+          case '1year':
+            start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+            break;
+        }
+      }
+
+      const Transaction = require('../models/Transaction');
+      const User = require('../models/User');
+      const Investment = require('../models/Investment');
+      const Property = require('../models/Property');
+
+      // Get revenue data (monthly)
+      const revenueData = await Transaction.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: start, $lte: end },
+            status: 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' }
+            },
+            revenue: { $sum: { $toDouble: '$amount' } },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } }
+      ]);
+
+      // Get user growth
+      const userGrowthData = await User.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' }
+            },
+            newUsers: { $sum: 1 }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } }
+      ]);
+
+      // Get total stats
+      const totalUsers = await User.countDocuments();
+      const activeUsers = await User.countDocuments({ 'wallet.balance': { $gt: 0 } });
+      const totalProperties = await Property.countDocuments({ isActive: true });
+      const totalInvestmentValue = await Transaction.aggregate([
+        {
+          $match: {
+            type: 'investment',
+            status: 'completed',
+            createdAt: { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: { $toDouble: '$amount' } }
+          }
+        }
+      ]);
+
+      // Get investment returns
+      const investments = await Investment.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalInvested: { $sum: { $toDouble: '$amount' } },
+            count: { $sum: 1 },
+            avgAmount: { $avg: { $toDouble: '$amount' } }
+          }
+        }
+      ]);
+
+      // Get KYC stats
+      const kycStats = await User.aggregate([
+        {
+          $group: {
+            _id: '$kycStatus',
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      // Calculate projections
+      const projectedReturns = (totalInvestmentValue[0]?.total || 0) * 0.098; // 9.8% average return
+
+      res.json({
+        success: true,
+        data: {
+          metrics: {
+            totalRevenue: totalInvestmentValue[0]?.total || 0,
+            totalUsers,
+            activeUsers,
+            totalProperties,
+            projectedReturns,
+            averageReturnPercentage: 9.8
+          },
+          monthlyRevenue: revenueData.map(d => ({
+            month: new Date(d._id.year, d._id.month - 1).toLocaleDateString('en-US', { month: 'short' }),
+            value: d.revenue,
+            count: d.count
+          })),
+          userGrowth: userGrowthData.map(d => ({
+            month: new Date(d._id.year, d._id.month - 1).toLocaleDateString('en-US', { month: 'short' }),
+            value: d.newUsers
+          })),
+          investmentStats: {
+            totalInvested: investments[0]?.totalInvested || 0,
+            investmentCount: investments[0]?.count || 0,
+            averageInvestment: investments[0]?.avgAmount || 0
+          },
+          kycStats: kycStats.reduce((acc, stat) => {
+            acc[stat._id || 'unknown'] = stat.count;
+            return acc;
+          }, {}),
+          dateRange: {
+            start,
+            end
+          }
+        }
+      });
+
+    } catch (error) {
+      logger.error("Get analytics error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching analytics",
+        error: error.message
+      });
+    }
+  }
+
 }
 module.exports = new AdminController();

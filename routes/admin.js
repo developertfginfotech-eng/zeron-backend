@@ -107,6 +107,23 @@ router.get('/investors', adminController.getActiveInvestors);
 // Get OTP status for current user
 router.get('/otp-status', adminController.getOTPStatus);
 
+// Get transactions and withdrawal data
+router.get('/transactions', authorize('super_admin', 'financial_analyst'), [
+  query('startDate').optional().isISO8601().withMessage('Invalid start date'),
+  query('endDate').optional().isISO8601().withMessage('Invalid end date'),
+  query('status').optional().isIn(['pending', 'completed', 'failed', 'approved', 'rejected']).withMessage('Invalid status'),
+  query('type').optional().isIn(['investment', 'payout', 'withdrawal', 'dividend']).withMessage('Invalid type'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).toInt().withMessage('Limit must be between 1 and 100'),
+  query('offset').optional().isInt({ min: 0 }).toInt().withMessage('Offset must be at least 0')
+], adminController.getTransactions);
+
+// Get analytics and platform insights
+router.get('/analytics', authorize('super_admin', 'financial_analyst'), [
+  query('startDate').optional().isISO8601().withMessage('Invalid start date'),
+  query('endDate').optional().isISO8601().withMessage('Invalid end date'),
+  query('range').optional().isIn(['7days', '30days', '90days', '1year']).withMessage('Invalid date range')
+], adminController.getAnalytics);
+
 // Get earnings report (super admin and financial analysts)
 router.get('/reports/earnings', authorize('super_admin', 'financial_analyst'), [
   query('startDate').optional().isISO8601().withMessage('Invalid start date'),
