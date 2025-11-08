@@ -1631,10 +1631,74 @@ try {
         User.countDocuments({ kycStatus: "pending" }),
       ]);
 
-      const totalInvestmentValue = await Investment.aggregate([
+      // Get investment value and returns using aggregation pipeline
+      const investmentStats = await Investment.aggregate([
         { $match: { status: "confirmed" } },
-        { $group: { _id: null, total: { $sum: "$amount" } } },
+        {
+          $facet: {
+            totals: [
+              {
+                $group: {
+                  _id: null,
+                  totalAmount: { $sum: "$amount" },
+                  totalReturns: { $sum: { $ifNull: ["$returns.totalReturnsReceived", 0] } },
+                  count: { $sum: 1 }
+                }
+              }
+            ],
+            investments: [
+              {
+                $project: {
+                  amount: 1,
+                  rentalYieldRate: { $ifNull: ["$rentalYieldRate", 0] },
+                  appreciationRate: { $ifNull: ["$appreciationRate", 0] },
+                  maturityPeriodYears: { $ifNull: ["$maturityPeriodYears", 5] },
+                  createdAt: 1,
+                  returns: { $ifNull: ["$returns.totalReturnsReceived", 0] }
+                }
+              }
+            ]
+          }
+        }
       ]);
+
+      const totals = investmentStats[0]?.totals[0] || { totalAmount: 0, totalReturns: 0, count: 0 };
+      const investments = investmentStats[0]?.investments || [];
+
+      // Calculate projected returns based on rental yield and appreciation
+      // During locking period: only rental yield
+      // After maturity: rental yield + appreciation
+      let projectedTotalReturns = 0;
+      investments.forEach(inv => {
+        // Get investment creation time
+        const investmentDate = new Date(inv.createdAt);
+        const maturityPeriodMs = inv.maturityPeriodYears * 365 * 24 * 60 * 60 * 1000;
+        const maturityDate = new Date(investmentDate.getTime() + maturityPeriodMs);
+        const now = new Date();
+
+        // Rental yield annual return (earned during entire period)
+        const annualRentalIncome = inv.amount * (inv.rentalYieldRate / 100);
+        const totalRentalIncome = annualRentalIncome * inv.maturityPeriodYears;
+
+        // Appreciation (only after maturity)
+        let appreciationGain = 0;
+        if (now >= maturityDate) {
+          // Investment has matured - apply full appreciation
+          const appreciationRate = inv.appreciationRate / 100;
+          const finalValue = inv.amount * Math.pow(1 + appreciationRate, inv.maturityPeriodYears);
+          appreciationGain = finalValue - inv.amount;
+        }
+
+        // Total projected returns for this investment
+        const projectedReturns = totalRentalIncome + appreciationGain;
+        projectedTotalReturns += projectedReturns;
+      });
+
+      // Calculate average return percentage
+      const totalInvestmentValue = totals.totalAmount;
+      const averageReturnPercentage = totalInvestmentValue > 0
+        ? ((projectedTotalReturns / totalInvestmentValue) * 100).toFixed(2)
+        : 0;
 
       res.json({
         success: true,
@@ -1645,7 +1709,10 @@ try {
             totalInvestments,
             totalUsers,
             pendingKyc,
-            totalInvestmentValue: totalInvestmentValue[0]?.total || 0,
+            totalInvestmentValue,
+            totalReturns: totals.totalReturns,
+            projectedReturns: Math.round(projectedTotalReturns),
+            averageReturnPercentage: parseFloat(averageReturnPercentage),
           },
         },
       });
@@ -2480,10 +2547,74 @@ try {
         User.countDocuments({ kycStatus: "pending" }),
       ]);
 
-      const totalInvestmentValue = await Investment.aggregate([
+      // Get investment value and returns using aggregation pipeline
+      const investmentStats = await Investment.aggregate([
         { $match: { status: "confirmed" } },
-        { $group: { _id: null, total: { $sum: "$amount" } } },
+        {
+          $facet: {
+            totals: [
+              {
+                $group: {
+                  _id: null,
+                  totalAmount: { $sum: "$amount" },
+                  totalReturns: { $sum: { $ifNull: ["$returns.totalReturnsReceived", 0] } },
+                  count: { $sum: 1 }
+                }
+              }
+            ],
+            investments: [
+              {
+                $project: {
+                  amount: 1,
+                  rentalYieldRate: { $ifNull: ["$rentalYieldRate", 0] },
+                  appreciationRate: { $ifNull: ["$appreciationRate", 0] },
+                  maturityPeriodYears: { $ifNull: ["$maturityPeriodYears", 5] },
+                  createdAt: 1,
+                  returns: { $ifNull: ["$returns.totalReturnsReceived", 0] }
+                }
+              }
+            ]
+          }
+        }
       ]);
+
+      const totals = investmentStats[0]?.totals[0] || { totalAmount: 0, totalReturns: 0, count: 0 };
+      const investments = investmentStats[0]?.investments || [];
+
+      // Calculate projected returns based on rental yield and appreciation
+      // During locking period: only rental yield
+      // After maturity: rental yield + appreciation
+      let projectedTotalReturns = 0;
+      investments.forEach(inv => {
+        // Get investment creation time
+        const investmentDate = new Date(inv.createdAt);
+        const maturityPeriodMs = inv.maturityPeriodYears * 365 * 24 * 60 * 60 * 1000;
+        const maturityDate = new Date(investmentDate.getTime() + maturityPeriodMs);
+        const now = new Date();
+
+        // Rental yield annual return (earned during entire period)
+        const annualRentalIncome = inv.amount * (inv.rentalYieldRate / 100);
+        const totalRentalIncome = annualRentalIncome * inv.maturityPeriodYears;
+
+        // Appreciation (only after maturity)
+        let appreciationGain = 0;
+        if (now >= maturityDate) {
+          // Investment has matured - apply full appreciation
+          const appreciationRate = inv.appreciationRate / 100;
+          const finalValue = inv.amount * Math.pow(1 + appreciationRate, inv.maturityPeriodYears);
+          appreciationGain = finalValue - inv.amount;
+        }
+
+        // Total projected returns for this investment
+        const projectedReturns = totalRentalIncome + appreciationGain;
+        projectedTotalReturns += projectedReturns;
+      });
+
+      // Calculate average return percentage
+      const totalInvestmentValue = totals.totalAmount;
+      const averageReturnPercentage = totalInvestmentValue > 0
+        ? ((projectedTotalReturns / totalInvestmentValue) * 100).toFixed(2)
+        : 0;
 
       res.json({
         success: true,
@@ -2494,7 +2625,10 @@ try {
             totalInvestments,
             totalUsers,
             pendingKyc,
-            totalInvestmentValue: totalInvestmentValue[0]?.total || 0,
+            totalInvestmentValue,
+            totalReturns: totals.totalReturns,
+            projectedReturns: Math.round(projectedTotalReturns),
+            averageReturnPercentage: parseFloat(averageReturnPercentage),
           },
         },
       });

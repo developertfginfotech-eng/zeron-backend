@@ -322,20 +322,25 @@ router.post('/calculate', async (req, res) => {
     const appreciation = settings.appreciationRatePercentage;
     const maturityYears = settings.maturityPeriodYears;
 
-    // Calculate rental income
+    // Calculate rental income (earned during entire locking period)
     const annualRentalIncome = amount * (rentalYield / 100);
     const totalRentalIncome = annualRentalIncome * maturityYears;
 
-    // Calculate appreciation (compound)
+    // Calculate appreciation (only applied at maturity)
     const finalValue = amount * Math.pow(1 + appreciation / 100, maturityYears);
     const appreciationGain = finalValue - amount;
 
-    // Total returns at maturity
+    // Total returns at maturity (rental income + appreciation)
     const totalReturnsAtMaturity = totalRentalIncome + appreciationGain;
     const totalValueAtMaturity = amount + totalReturnsAtMaturity;
 
+    // During locking period (before maturity): only rental yield
+    const returnsAtLocking = totalRentalIncome;
+    const valueAtLocking = amount + returnsAtLocking;
+
     // Calculate early withdrawal penalty
     const penaltyAmount = amount * (settings.earlyWithdrawalPenaltyPercentage / 100);
+    const amountAfterEarlyWithdrawalPenalty = amount - penaltyAmount;
 
     res.json({
       success: true,
@@ -344,19 +349,33 @@ router.post('/calculate', async (req, res) => {
         rentalYieldPercentage: rentalYield,
         appreciationRatePercentage: appreciation,
         maturityPeriodYears: maturityYears,
+        lockingPeriodYears: maturityYears,
         investmentDurationYears: settings.investmentDurationYears,
         earlyWithdrawalPenaltyPercentage: settings.earlyWithdrawalPenaltyPercentage
       },
       returns: {
         annualRentalIncome,
-        totalRentalIncome,
-        appreciationGain,
-        totalReturnsAtMaturity,
-        totalValueAtMaturity
+        // During locking period (years 1-3)
+        lockingPeriod: {
+          rentalYield: totalRentalIncome,
+          projectedValue: valueAtLocking,
+          description: `After ${maturityYears} years (locking period)`
+        },
+        // After maturity (year 3+)
+        atMaturity: {
+          rentalYield: totalRentalIncome,
+          appreciation: appreciationGain,
+          totalReturns: totalReturnsAtMaturity,
+          projectedValue: totalValueAtMaturity,
+          description: `At maturity after ${maturityYears} years`
+        }
       },
       earlyWithdrawal: {
+        lockingPeriodYears: maturityYears,
+        penaltyPercentage: settings.earlyWithdrawalPenaltyPercentage,
         penaltyAmount,
-        amountAfterPenalty: amount - penaltyAmount
+        amountAfterPenalty: amountAfterEarlyWithdrawalPenalty,
+        description: `Penalty applied if withdrawn before ${maturityYears} years`
       }
     });
   } catch (error) {
