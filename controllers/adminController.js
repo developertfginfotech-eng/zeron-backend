@@ -1279,161 +1279,6 @@ try {
     }
   }
 
-  async getProperties(req, res) {
-  try {
-    console.log("=== GET PROPERTIES - SHOW ALL ===");
-    console.log("Query params:", req.query);
-
-    const {
-      page = 1,
-      limit = 20,
-      sort = "-createdAt",
-      propertyType,
-      search,
-      city,
-    } = req.query;
-
-    // Build filter - NO STATUS FILTERING AT ALL
-    const filter = {};
-
-    // Only filter by non-status fields
-    if (propertyType && propertyType !== 'all') {
-      console.log("PropertyType filter:", propertyType);
-      filter.propertyType = propertyType;
-    }
-    
-    if (city) {
-      console.log("City filter:", city);
-      filter["location.city"] = city.toLowerCase();
-    }
-
-    if (search) {
-      console.log("Search filter:", search);
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { titleAr: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { "location.address": { $regex: search, $options: "i" } },
-        { "location.city": { $regex: search, $options: "i" } },
-      ];
-    }
-
-    console.log("Final filter (NO STATUS FILTER):", JSON.stringify(filter, null, 2));
-
-    // Debug info
-    const totalInDB = await Property.countDocuments();
-    const matchingFilter = await Property.countDocuments(filter);
-    
-    console.log(`Total properties in DB: ${totalInDB}`);
-    console.log(`Properties matching filter: ${matchingFilter}`);
-
-    // Show all statuses in DB
-    const statusStats = await Property.aggregate([
-      {
-        $group: {
-          _id: "$status",
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
-    console.log("All statuses in DB:", statusStats);
-
-    // Pagination
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Get ALL properties (no status filtering in aggregation either)
-    const [properties, totalProperties] = await Promise.all([
-      Property.aggregate([
-        { $match: filter }, // No status filter here
-        {
-          $lookup: {
-            from: "investments",
-            localField: "_id",
-            foreignField: "property",
-            as: "investments",
-          },
-        },
-        {
-          $addFields: {
-            investorCount: { $size: "$investments" },
-            totalInvested: { $ifNull: [{ $sum: "$investments.amount" }, 0] },
-            fundingProgress: {
-              $cond: {
-                if: { $gt: ["$financials.totalValue", 0] },
-                then: {
-                  $multiply: [
-                    { 
-                      $divide: [
-                        { $ifNull: [{ $sum: "$investments.amount" }, 0] }, 
-                        "$financials.totalValue"
-                      ] 
-                    },
-                    100
-                  ]
-                },
-                else: { $ifNull: ["$fundingProgress", 0] }
-              },
-            },
-          },
-        },
-        {
-          $sort: {
-            [sort.startsWith("-") ? sort.substring(1) : sort]:
-              sort.startsWith("-") ? -1 : 1,
-          },
-        },
-        { $skip: skip },
-        { $limit: limitNum },
-      ]),
-      Property.countDocuments(filter),
-    ]);
-
-    console.log(`Found ${properties.length} properties`);
-    properties.forEach((prop, index) => {
-      console.log(`Property ${index + 1}: ${prop.title} - Status: ${prop.status}`);
-    });
-
-    const totalPages = Math.ceil(totalProperties / limitNum);
-
-    logger.info(
-      `Fetched ALL properties - User: ${req.user ? req.user.id : 'anonymous'}, Found: ${properties.length}/${totalProperties}`
-    );
-
-    res.json({
-      success: true,
-      data: {
-        properties,
-        pagination: {
-          page: pageNum,
-          pages: totalPages,
-          total: totalProperties,
-          limit: limitNum,
-          hasNext: pageNum < totalPages,
-          hasPrev: pageNum > 1,
-        },
-        debug: {
-          totalInDB,
-          matchingFilter,
-          statusStats,
-          message: "Showing ALL properties regardless of status"
-        }
-      },
-    });
-
-  } catch (error) {
-    console.error("Get properties error:", error);
-    logger.error("Get properties error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching properties",
-      error: error.message,
-    });
-  }
-}
-
   async getPropertyById(req, res) {
     try {
       const { id } = req.params;
@@ -2243,6 +2088,7 @@ try {
 
   async getProperties(req, res) {
     try {
+      // Extract and validate query parameters
       const {
         page = 1,
         limit = 20,
@@ -2253,31 +2099,54 @@ try {
         city,
       } = req.query;
 
-      // Build filter
-      const filter = {};
-      if (status) filter.status = status;
-      if (propertyType) filter.propertyType = propertyType;
-      if (city) filter["location.city"] = city.toLowerCase();
+      // Validate and sanitize pagination parameters
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20)); // Max 100 per page
+      const skip = (pageNum - 1) * limitNum;
 
-      if (search) {
+      // Build MongoDB filter object
+      const filter = {};
+
+      // Apply status filter if provided
+      if (status && typeof status === 'string') {
+        filter.status = status.trim();
+      }
+
+      // Apply property type filter if provided
+      if (propertyType && typeof propertyType === 'string') {
+        filter.propertyType = propertyType.trim();
+      }
+
+      // Apply city filter (case-insensitive)
+      if (city && typeof city === 'string') {
+        filter["location.city"] = { $regex: `^${city.trim()}$`, $options: 'i' };
+      }
+
+      // Apply search filter across multiple fields
+      if (search && typeof search === 'string' && search.trim().length > 0) {
+        const searchRegex = search.trim();
         filter.$or = [
-          { title: { $regex: search, $options: "i" } },
-          { titleAr: { $regex: search, $options: "i" } },
-          { description: { $regex: search, $options: "i" } },
-          { "location.address": { $regex: search, $options: "i" } },
-          { "location.city": { $regex: search, $options: "i" } },
+          { title: { $regex: searchRegex, $options: "i" } },
+          { titleAr: { $regex: searchRegex, $options: "i" } },
+          { description: { $regex: searchRegex, $options: "i" } },
+          { "location.address": { $regex: searchRegex, $options: "i" } },
+          { "location.city": { $regex: searchRegex, $options: "i" } },
         ];
       }
 
-      // Pagination
-      const pageNum = parseInt(page);
-      const limitNum = parseInt(limit);
-      const skip = (pageNum - 1) * limitNum;
+      // Validate sort parameter to prevent injection
+      const validSortFields = ['createdAt', 'title', 'financials.totalValue', 'status', 'propertyType'];
+      const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
+      const isSortValid = validSortFields.includes(sortField);
+      const sortObj = isSortValid
+        ? { [sortField]: sort.startsWith('-') ? -1 : 1 }
+        : { createdAt: -1 };
 
-      // Get properties with aggregation for additional data
+      // Fetch properties with aggregation pipeline for investment data
       const [properties, totalProperties] = await Promise.all([
         Property.aggregate([
           { $match: filter },
+          // Join with investments collection
           {
             $lookup: {
               from: "investments",
@@ -2286,10 +2155,11 @@ try {
               as: "investments",
             },
           },
+          // Calculate investment metrics
           {
             $addFields: {
               investorCount: { $size: "$investments" },
-              totalInvested: { $sum: "$investments.amount" },
+              totalInvested: { $ifNull: [{ $sum: "$investments.amount" }, 0] },
               fundingProgress: {
                 $cond: {
                   if: { $gt: ["$financials.totalValue", 0] },
@@ -2297,7 +2167,7 @@ try {
                     $multiply: [
                       {
                         $divide: [
-                          { $sum: "$investments.amount" },
+                          { $ifNull: [{ $sum: "$investments.amount" }, 0] },
                           "$financials.totalValue",
                         ],
                       },
@@ -2309,14 +2179,13 @@ try {
               },
             },
           },
-          {
-            $sort: {
-              [sort.startsWith("-") ? sort.substring(1) : sort]:
-                sort.startsWith("-") ? -1 : 1,
-            },
-          },
+          // Apply sorting
+          { $sort: sortObj },
+          // Pagination
           { $skip: skip },
           { $limit: limitNum },
+          // Remove sensitive data
+          { $project: { investments: 0 } },
         ]),
         Property.countDocuments(filter),
       ]);
@@ -2324,10 +2193,10 @@ try {
       const totalPages = Math.ceil(totalProperties / limitNum);
 
       logger.info(
-        `Fetched properties list - User: ${req.user ? req.user.id : 'anonymous'}, Page: ${page}`
+        `Fetched properties list - User: ${req.user ? req.user.id : 'anonymous'}, Page: ${pageNum}, Found: ${totalProperties}`
       );
 
-      res.json({
+      return res.status(200).json({
         success: true,
         data: {
           properties,
@@ -2346,7 +2215,7 @@ try {
       res.status(500).json({
         success: false,
         message: "Error fetching properties",
-        error: error.message,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined,
       });
     }
   }
