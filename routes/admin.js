@@ -19,13 +19,14 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-// Apply authentication to all routes
-router.use(authenticate);
-// Get all properties
+// Public property browsing - no authentication required
 router.get('/properties', adminController.getProperties);
 
-// Get specific property
+// Get specific property (public)
 router.get('/properties/:id', adminController.getPropertyById);
+
+// Apply authentication to all remaining admin routes
+router.use(authenticate);
 
 // Base authorization for admin routes (all admin roles can access unless specified)
 router.use(authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'));
