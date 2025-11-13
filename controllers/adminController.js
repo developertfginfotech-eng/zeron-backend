@@ -1399,7 +1399,7 @@ try {
     const totalPages = Math.ceil(totalProperties / limitNum);
 
     logger.info(
-      `Admin fetched ALL properties - Admin: ${req.user.id}, Found: ${properties.length}/${totalProperties}`
+      `Fetched ALL properties - User: ${req.user ? req.user.id : 'anonymous'}, Found: ${properties.length}/${totalProperties}`
     );
 
     res.json({
