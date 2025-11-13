@@ -2324,7 +2324,7 @@ try {
       const totalPages = Math.ceil(totalProperties / limitNum);
 
       logger.info(
-        `Admin fetched properties list - Admin: ${req.user.id}, Page: ${page}`
+        `Fetched properties list - User: ${req.user ? req.user.id : 'anonymous'}, Page: ${page}`
       );
 
       res.json({
