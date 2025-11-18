@@ -59,14 +59,28 @@ router.post('/',
     body('propertyId')
       .isMongoId()
       .withMessage('Invalid property ID'),
+    // Accept either shares OR amount (for backward compatibility)
+    body('shares')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('Shares must be at least 1'),
     body('amount')
+      .optional()
       .isFloat({ min: 1000 })
       .withMessage('Minimum investment is SAR 1,000')
   ],
   async (req, res) => {
     try {
-      const { propertyId, amount } = req.body;
+      const { propertyId, shares: requestedShares, amount: requestedAmount } = req.body;
       const userId = req.user.id;
+
+      // Validate that either shares or amount is provided
+      if (!requestedShares && !requestedAmount) {
+        return res.status(400).json({
+          success: false,
+          message: 'Either shares or amount must be provided'
+        });
+      }
 
       // Get property
       const property = await Property.findById(propertyId);
@@ -85,13 +99,52 @@ router.post('/',
         });
       }
 
-      // Check minimum investment
+      // Get price per share
+      const pricePerShare = property.financials.pricePerShare || property.financials.minInvestment || 1000;
       const minInvestment = property.financials.minInvestment || 1000;
-      if (amount < minInvestment) {
-        return res.status(400).json({
-          success: false,
-          message: `Minimum investment is SAR ${minInvestment}`
-        });
+
+      // Calculate shares and amount based on what was provided
+      let shares, amount;
+
+      if (requestedShares) {
+        // User provided shares (units) - calculate amount
+        shares = parseInt(requestedShares);
+        amount = shares * pricePerShare;
+
+        // Check minimum investment
+        if (amount < minInvestment) {
+          const minShares = Math.ceil(minInvestment / pricePerShare);
+          return res.status(400).json({
+            success: false,
+            message: `Minimum ${minShares} shares required (SAR ${minInvestment} minimum investment)`
+          });
+        }
+
+        // Check available shares
+        if (shares > (property.financials.availableShares || 0)) {
+          return res.status(400).json({
+            success: false,
+            message: `Only ${property.financials.availableShares} shares available`
+          });
+        }
+      } else {
+        // User provided amount - calculate shares (backward compatibility)
+        amount = parseFloat(requestedAmount);
+
+        // Check minimum investment
+        if (amount < minInvestment) {
+          return res.status(400).json({
+            success: false,
+            message: `Minimum investment is SAR ${minInvestment}`
+          });
+        }
+
+        shares = Math.floor(amount / pricePerShare);
+
+        // Ensure at least 1 share
+        if (shares < 1) {
+          shares = 1;
+        }
       }
 
       // Get user and check wallet balance
@@ -109,26 +162,6 @@ router.post('/',
           success: false,
           message: 'Insufficient wallet balance'
         });
-      }
-
-      // Calculate shares - based on minimum investment units
-      // If pricePerShare is 0 or not set, use a default calculation
-      let pricePerShare = property.financials.pricePerShare;
-      let shares = 1;
-
-      if (!pricePerShare || pricePerShare <= 0) {
-        // If no price per share, calculate based on min investment
-        // Assume each share unit is worth the minimum investment
-        pricePerShare = minInvestment;
-        shares = Math.floor(amount / minInvestment);
-      } else {
-        shares = Math.floor(amount / pricePerShare);
-      }
-
-      // Ensure at least 1 share
-      if (shares < 1) {
-        shares = 1;
-        pricePerShare = amount; // Adjust price to match amount
       }
 
       // Get investment settings - use property-specific if set, otherwise use global
@@ -408,7 +441,7 @@ router.post('/calculate', async (req, res) => {
 // Withdraw investment
 router.post('/:id/withdraw', authenticate, async (req, res) => {
   try {
-    const investment = await Investment.findById(req.params.id);
+    const investment = await Investment.findById(req.params.id).populate('property', 'title');
 
     if (!investment) {
       return res.status(404).json({
@@ -433,35 +466,142 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
     }
 
     const now = new Date();
+    const investmentDate = new Date(investment.createdAt);
     const maturityDate = investment.maturityDate ? new Date(investment.maturityDate) : null;
+
+    // Calculate holding period in years
+    const holdingPeriodMs = now - investmentDate;
+    const holdingPeriodYears = holdingPeriodMs / (365 * 24 * 60 * 60 * 1000);
 
     // Check if withdrawal is before maturity
     const isEarlyWithdrawal = maturityDate && now < maturityDate;
 
-    let withdrawalAmount = investment.amount;
-    let penalty = 0;
+    const principalAmount = investment.amount;
+    const rentalYieldRate = investment.rentalYieldRate || 0;
+    const appreciationRate = investment.appreciationRate || 0;
+    const penaltyRate = investment.penaltyRate || 0;
+    const maturityPeriodYears = investment.maturityPeriodYears || 5;
 
-    if (isEarlyWithdrawal && investment.penaltyRate) {
-      penalty = withdrawalAmount * (investment.penaltyRate / 100);
-      withdrawalAmount = withdrawalAmount - penalty;
+    // Calculate rental yield earned (earned throughout holding period)
+    const annualRentalIncome = principalAmount * (rentalYieldRate / 100);
+    const totalRentalYield = annualRentalIncome * Math.min(holdingPeriodYears, maturityPeriodYears);
+
+    let appreciationGain = 0;
+    let totalValue = principalAmount + totalRentalYield;
+    let penalty = 0;
+    let withdrawalAmount = 0;
+
+    if (isEarlyWithdrawal) {
+      // EARLY WITHDRAWAL (Before Maturity)
+      // User gets: Principal + Rental Yield - Penalty
+      // NO appreciation gains (only after maturity)
+
+      penalty = principalAmount * (penaltyRate / 100);
+      withdrawalAmount = principalAmount + totalRentalYield - penalty;
+
+    } else {
+      // AFTER MATURITY
+      // User gets: Principal + Full Rental Yield + Appreciation Gains
+
+      // Calculate appreciation for years held after maturity
+      const yearsAfterMaturity = Math.max(0, holdingPeriodYears - maturityPeriodYears);
+
+      // Appreciation is calculated on the principal for years after maturity
+      // Using compound interest formula: FV = PV * (1 + r)^n
+      if (yearsAfterMaturity > 0) {
+        const appreciatedValue = principalAmount * Math.pow(1 + appreciationRate / 100, yearsAfterMaturity);
+        appreciationGain = appreciatedValue - principalAmount;
+      }
+
+      totalValue = principalAmount + totalRentalYield + appreciationGain;
+      withdrawalAmount = totalValue;
     }
+
+    // Get user and update wallet
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Get current balance
+    const balanceSummary = await Transaction.getUserBalance(req.user._id);
+    const balanceBefore = (balanceSummary.totalDeposits || 0) -
+                         (balanceSummary.totalWithdrawals || 0) -
+                         (balanceSummary.totalInvestments || 0) +
+                         (balanceSummary.totalPayouts || 0);
+
+    // Create withdrawal transaction
+    const transaction = new Transaction({
+      user: req.user._id,
+      type: 'payout',
+      amount: withdrawalAmount,
+      description: `Withdrawal from ${investment.property.title} - ${isEarlyWithdrawal ? 'Early (with penalty)' : 'After maturity'}`,
+      status: 'completed',
+      paymentMethod: 'wallet',
+      relatedEntity: 'investment',
+      relatedEntityId: investment._id,
+      balanceBefore: Math.max(balanceBefore, 0),
+      balanceAfter: Math.max(balanceBefore + withdrawalAmount, 0),
+      metadata: {
+        principalAmount,
+        rentalYield: totalRentalYield,
+        appreciationGain,
+        penalty,
+        isEarlyWithdrawal,
+        holdingPeriodYears: holdingPeriodYears.toFixed(2)
+      }
+    });
+
+    await transaction.save();
+
+    // Update user wallet
+    user.wallet.balance = Math.max(balanceBefore + withdrawalAmount, 0);
+    user.wallet.totalReturns = (user.wallet.totalReturns || 0) + totalRentalYield + appreciationGain;
+    await user.save();
 
     // Update investment status
     investment.status = 'cancelled';
     investment.exitDate = now;
+    investment.returns.totalReturnsReceived = totalRentalYield + appreciationGain;
+    investment.returns.lastReturnDate = now;
     await investment.save();
+
+    logger.info(`Investment withdrawn: User ${req.user._id}, Investment ${investment._id}, Amount SAR ${withdrawalAmount}`);
 
     res.json({
       success: true,
-      investment,
-      withdrawalAmount,
-      penalty,
-      isEarlyWithdrawal,
+      data: {
+        withdrawalDetails: {
+          principalAmount,
+          rentalYieldEarned: totalRentalYield,
+          appreciationGain,
+          penalty,
+          totalWithdrawalAmount: withdrawalAmount
+        },
+        timing: {
+          investedDate: investmentDate,
+          maturityDate,
+          withdrawalDate: now,
+          holdingPeriodYears: holdingPeriodYears.toFixed(2),
+          isEarlyWithdrawal
+        },
+        rates: {
+          rentalYieldRate: `${rentalYieldRate}%`,
+          appreciationRate: `${appreciationRate}%`,
+          penaltyRate: isEarlyWithdrawal ? `${penaltyRate}%` : 'N/A'
+        },
+        newWalletBalance: user.wallet.balance
+      },
       message: isEarlyWithdrawal
-        ? `Early withdrawal with ${investment.penaltyRate}% penalty`
-        : 'Withdrawal after maturity - no penalty'
+        ? `Early withdrawal completed with ${penaltyRate}% penalty. Amount credited: SAR ${withdrawalAmount.toFixed(2)}`
+        : `Withdrawal after maturity completed. Total returns: SAR ${(totalRentalYield + appreciationGain).toFixed(2)}`
     });
+
   } catch (error) {
+    logger.error('Withdraw investment error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to process withdrawal',

@@ -2596,7 +2596,7 @@ try {
       ];
 
       if (propertyId) {
-        pipeline[0].$match.property = mongoose.Types.ObjectId(propertyId);
+        pipeline[0].$match.property = new mongoose.Types.ObjectId(propertyId);
       }
 
       if (search) {
@@ -3051,6 +3051,133 @@ try {
       res.status(500).json({
         success: false,
         message: "Error fetching analytics",
+        error: error.message
+      });
+    }
+  }
+
+  async getInvestorById(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Validate MongoDB ObjectId
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid investor ID format"
+        });
+      }
+
+      // Find the user/investor
+      const investor = await User.findById(id).select("-password");
+
+      if (!investor) {
+        return res.status(404).json({
+          success: false,
+          message: "Investor not found"
+        });
+      }
+
+      // Get investment data for this investor
+      const investmentsPipeline = [
+        {
+          $match: {
+            user: new mongoose.Types.ObjectId(id),
+            status: "confirmed"
+          }
+        },
+        {
+          $lookup: {
+            from: "properties",
+            localField: "property",
+            foreignField: "_id",
+            as: "propertyDetails"
+          }
+        },
+        {
+          $unwind: "$propertyDetails"
+        },
+        {
+          $group: {
+            _id: null,
+            totalInvestments: { $sum: "$amount" },
+            totalReturns: { $sum: "$returns.totalReturnsReceived" },
+            investmentCount: { $sum: 1 },
+            properties: {
+              $push: {
+                propertyId: "$property",
+                propertyTitle: "$propertyDetails.title",
+                propertyLocation: "$propertyDetails.location",
+                amount: "$amount",
+                ownershipPercentage: "$ownershipPercentage",
+                returns: "$returns.totalReturnsReceived",
+                date: "$createdAt",
+                status: "$status"
+              }
+            },
+            firstInvestment: { $min: "$createdAt" },
+            lastInvestment: { $max: "$createdAt" }
+          }
+        }
+      ];
+
+      const [investmentData] = await Investment.aggregate(investmentsPipeline);
+
+      // Get KYC data
+      const kycData = await KYC.findOne({ user: id });
+
+      // Prepare response
+      const response = {
+        success: true,
+        data: {
+          id: investor._id,
+          firstName: investor.firstName,
+          lastName: investor.lastName,
+          name: `${investor.firstName} ${investor.lastName}`,
+          email: investor.email,
+          phone: investor.phone,
+          kycStatus: investor.kycStatus,
+          status: investor.status,
+          role: investor.role,
+          createdAt: investor.createdAt,
+          updatedAt: investor.updatedAt,
+
+          // Investment summary
+          totalInvested: investmentData?.totalInvestments || 0,
+          totalReturns: investmentData?.totalReturns || 0,
+          activeInvestments: investmentData?.investmentCount || 0,
+          firstInvestment: investmentData?.firstInvestment || null,
+          lastInvestment: investmentData?.lastInvestment || null,
+
+          // Properties invested in
+          properties: investmentData?.properties || [],
+
+          // KYC details (if available)
+          kyc: kycData ? {
+            nationality: kycData.nationality,
+            dateOfBirth: kycData.dateOfBirth,
+            idNumber: kycData.idNumber,
+            address: kycData.address,
+            city: kycData.city,
+            country: kycData.country,
+            occupation: kycData.occupation,
+            income: kycData.income,
+            submittedAt: kycData.createdAt,
+            reviewedAt: kycData.reviewedAt,
+            reviewedBy: kycData.reviewedBy
+          } : null
+        }
+      };
+
+      logger.info(`Admin fetched investor by ID - Admin: ${req.user.id}, Investor: ${id}`);
+
+      res.json(response);
+
+    } catch (error) {
+      logger.error("Get investor by ID error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching investor details",
         error: error.message
       });
     }

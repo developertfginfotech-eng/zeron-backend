@@ -105,6 +105,9 @@ router.get('/dashboard', adminController.getDashboard);
 // Get active investors list
 router.get('/investors', adminController.getActiveInvestors);
 
+// Get specific investor by ID
+router.get('/investors/:id', adminController.getInvestorById);
+
 // Get OTP status for current user
 router.get('/otp-status', adminController.getOTPStatus);
 
