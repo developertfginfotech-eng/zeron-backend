@@ -13,6 +13,8 @@ const logger = require('../utils/logger');
 // Get my investments (user's investments)
 router.get('/my-investments', authenticate, async (req, res) => {
   try {
+    const { calculateInvestmentReturns } = require('../utils/calculate-investment-returns');
+
     const investments = await Investment.find({
       user: req.user.id,
       status: 'confirmed'
@@ -23,24 +25,36 @@ router.get('/my-investments', authenticate, async (req, res) => {
 
     res.json({
       success: true,
-      data: investments.map(inv => ({
-        id: inv._id,
-        _id: inv._id,
-        propertyId: inv.property._id,
-        propertyName: inv.property.title,
-        amount: inv.amount,
-        shares: inv.shares,
-        status: inv.status,
-        createdAt: inv.createdAt,
-        investedAt: inv.createdAt,
-        returns: inv.returns?.totalReturnsReceived || 0,
-        rentalYieldRate: inv.rentalYieldRate || 0,
-        appreciationRate: inv.appreciationRate || 0,
-        penaltyRate: inv.penaltyRate || 0,
-        maturityDate: inv.maturityDate,
-        maturityPeriodYears: inv.maturityPeriodYears || 5,
-        property: inv.property
-      }))
+      data: investments.map(inv => {
+        // Calculate real-time returns for this investment
+        const calculatedReturns = calculateInvestmentReturns(inv);
+
+        return {
+          id: inv._id,
+          _id: inv._id,
+          propertyId: inv.property._id,
+          propertyName: inv.property.title,
+          amount: inv.amount,
+          shares: inv.shares,
+          status: inv.status,
+          createdAt: inv.createdAt,
+          investedAt: inv.createdAt,
+          // Real-time calculated returns (unrealized)
+          currentValue: calculatedReturns.currentValue,
+          returns: calculatedReturns.totalReturns,
+          rentalYieldEarned: calculatedReturns.rentalYieldEarned,
+          appreciationGain: calculatedReturns.appreciationGain,
+          holdingPeriodYears: calculatedReturns.holdingPeriodYears,
+          isAfterMaturity: calculatedReturns.isAfterMaturity,
+          // Original rates
+          rentalYieldRate: inv.rentalYieldRate || 0,
+          appreciationRate: inv.appreciationRate || 0,
+          penaltyRate: inv.penaltyRate || 0,
+          maturityDate: inv.maturityDate,
+          maturityPeriodYears: inv.maturityPeriodYears || 5,
+          property: inv.property
+        };
+      })
     });
   } catch (error) {
     logger.error('Get my investments error:', error);
@@ -182,6 +196,15 @@ router.post('/',
       const penalty = propertySettings.earlyWithdrawalPenaltyPercentage !== null ? propertySettings.earlyWithdrawalPenaltyPercentage : settings.earlyWithdrawalPenaltyPercentage;
       const maturityPeriod = propertySettings.lockingPeriodYears !== null ? propertySettings.lockingPeriodYears : settings.maturityPeriodYears;
 
+      // ==================== TEST MODE (REMOVE BEFORE PRODUCTION) ====================
+      // Accelerated maturity: maturityPeriod hours instead of years
+      // Comment out this line to use real time
+      const maturityDateMs = Date.now() + maturityPeriod * 60 * 60 * 1000; // hours
+
+      // Real time calculation (uncomment for production):
+      // const maturityDateMs = Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000; // years
+      // ==================== END TEST MODE ====================
+
       // Create investment
       const investment = new Investment({
         user: userId,
@@ -197,7 +220,7 @@ router.post('/',
         rentalYieldRate: rentalYield,
         appreciationRate: appreciation,
         penaltyRate: penalty,
-        maturityDate: new Date(Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000),
+        maturityDate: new Date(maturityDateMs),
         maturityPeriodYears: maturityPeriod,
         investmentDurationYears: maturityPeriod
       });
@@ -243,7 +266,7 @@ router.post('/',
       if (property.financials && property.financials.totalValue && property.financials.totalValue > 0) {
         // Calculate total invested amount for this property
         const totalInvested = await Investment.aggregate([
-          { $match: { property: mongoose.Types.ObjectId(propertyId), status: 'confirmed' } },
+          { $match: { property: new mongoose.Types.ObjectId(propertyId), status: 'confirmed' } },
           { $group: { _id: null, total: { $sum: '$amount' } } }
         ]);
 
@@ -309,7 +332,7 @@ router.post('/settings', authenticate, async (req, res) => {
     const settings = await InvestmentSettings.create({
       ...req.body,
       isActive: true,
-      createdBy: req.user._id
+      createdBy: req.user.id
     });
 
     res.status(201).json(settings);
@@ -327,7 +350,7 @@ router.put('/settings/:id', authenticate, async (req, res) => {
   try {
     const settings = await InvestmentSettings.findByIdAndUpdate(
       req.params.id,
-      { ...req.body, updatedBy: req.user._id },
+      { ...req.body, updatedBy: req.user.id },
       { new: true, runValidators: true }
     );
 
@@ -450,8 +473,16 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
       });
     }
 
+    // Check if investment has a user
+    if (!investment.user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Investment has no associated user'
+      });
+    }
+
     // Verify ownership
-    if (investment.user.toString() !== req.user._id.toString()) {
+    if (investment.user.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to withdraw this investment'
@@ -471,7 +502,15 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
 
     // Calculate holding period in years
     const holdingPeriodMs = now - investmentDate;
-    const holdingPeriodYears = holdingPeriodMs / (365 * 24 * 60 * 60 * 1000);
+
+    // ==================== TEST MODE (REMOVE BEFORE PRODUCTION) ====================
+    // Accelerated time for testing: 1 hour = 1 year
+    // Comment out this line to use real time
+    const holdingPeriodYears = holdingPeriodMs / (60 * 60 * 1000); // 1 hour = 1 year
+
+    // Real time calculation (uncomment for production):
+    // const holdingPeriodYears = holdingPeriodMs / (365 * 24 * 60 * 60 * 1000);
+    // ==================== END TEST MODE ====================
 
     // Check if withdrawal is before maturity
     const isEarlyWithdrawal = maturityDate && now < maturityDate;
@@ -518,7 +557,7 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
     }
 
     // Get user and update wallet
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -527,7 +566,7 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
     }
 
     // Get current balance
-    const balanceSummary = await Transaction.getUserBalance(req.user._id);
+    const balanceSummary = await Transaction.getUserBalance(req.user.id);
     const balanceBefore = (balanceSummary.totalDeposits || 0) -
                          (balanceSummary.totalWithdrawals || 0) -
                          (balanceSummary.totalInvestments || 0) +
@@ -535,7 +574,7 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
 
     // Create withdrawal transaction
     const transaction = new Transaction({
-      user: req.user._id,
+      user: req.user.id,
       type: 'payout',
       amount: withdrawalAmount,
       description: `Withdrawal from ${investment.property.title} - ${isEarlyWithdrawal ? 'Early (with penalty)' : 'After maturity'}`,
@@ -569,7 +608,7 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
     investment.returns.lastReturnDate = now;
     await investment.save();
 
-    logger.info(`Investment withdrawn: User ${req.user._id}, Investment ${investment._id}, Amount SAR ${withdrawalAmount}`);
+    logger.info(`Investment withdrawn: User ${req.user.id}, Investment ${investment._id}, Amount SAR ${withdrawalAmount}`);
 
     res.json({
       success: true,
