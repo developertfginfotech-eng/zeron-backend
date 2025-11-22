@@ -203,6 +203,8 @@ class UserController {
 
   async getPortfolioData(userId, res) {
     try {
+      const { calculateInvestmentReturns } = require('../utils/calculate-investment-returns');
+
       const investments = await Investment.find({
         user: userId,
         status: 'confirmed'
@@ -210,13 +212,36 @@ class UserController {
       .populate('property', 'title titleAr location financials images status')
       .lean();
 
+      // ==================== CALCULATE REAL-TIME RETURNS ====================
+      // Calculate unrealized returns for each active investment
+      let totalUnrealizedReturns = 0;
+      let totalCurrentValue = 0;
+      let totalInvested = 0;
+
+      investments.forEach(investment => {
+        const returns = calculateInvestmentReturns(investment);
+        totalCurrentValue += returns.currentValue;
+        totalInvested += returns.principalAmount;
+        totalUnrealizedReturns += returns.totalReturns;
+      });
+
+      // Get realized returns from wallet (already withdrawn)
+      const user = await User.findById(userId);
+      const realizedReturns = user?.wallet?.totalReturns || 0;
+
+      // Total returns = unrealized (current investments) + realized (withdrawn)
+      const totalReturns = totalUnrealizedReturns + realizedReturns;
+      // ==================== END REAL-TIME CALCULATION ====================
+
       const portfolioSummary = await Investment.getUserPortfolioSummary(userId);
 
-      const summary = portfolioSummary[0] || {
-        totalInvestments: 0,
-        totalCurrentValue: 0,
-        totalReturns: 0,
-        propertyCount: 0
+      const summary = {
+        totalInvestments: totalInvested,
+        totalCurrentValue: totalCurrentValue,
+        totalReturns: totalReturns,
+        propertyCount: investments.length,
+        unrealizedGains: totalUnrealizedReturns,
+        realizedGains: realizedReturns
       };
 
       // Calculate total shares across all investments
@@ -226,6 +251,15 @@ class UserController {
       const totalReturn = summary.totalReturns + totalProfitLoss;
       const totalReturnPercentage = summary.totalInvestments > 0
         ? (totalReturn / summary.totalInvestments) * 100
+        : 0;
+
+      // Calculate percentage changes for dashboard
+      const portfolioGrowthPercentage = summary.totalInvestments > 0
+        ? ((summary.totalCurrentValue - summary.totalInvestments) / summary.totalInvestments) * 100
+        : 0;
+
+      const totalReturnsPercentage = summary.totalInvestments > 0
+        ? (summary.totalReturns / summary.totalInvestments) * 100
         : 0;
 
       const monthlyPerformance = await Investment.aggregate([
@@ -290,6 +324,8 @@ class UserController {
             totalProfitLoss,
             totalReturn,
             totalReturnPercentage,
+            portfolioGrowthPercentage: parseFloat(portfolioGrowthPercentage.toFixed(2)),
+            totalReturnsPercentage: parseFloat(totalReturnsPercentage.toFixed(2)),
             averageReturn: summary.propertyCount > 0 ? totalReturn / summary.propertyCount : 0
           },
           investments: portfolioDetails,

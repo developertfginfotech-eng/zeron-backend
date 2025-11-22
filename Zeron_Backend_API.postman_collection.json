@@ -2,7 +2,7 @@
   "info": {
     "name": "Zeron Backend API",
     "_postman_id": "zeron-backend-api",
-    "description": "Complete API collection for Zeron real estate platform",
+    "description": "Complete API collection for Zeron real estate platform with detailed request bodies and test validations",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -30,6 +30,11 @@
       "key": "investor_id",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "kyc_id",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -38,6 +43,31 @@
       "item": [
         {
           "name": "Register User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has success field', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('Response has user data', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('user');",
+                  "    pm.expect(jsonData.data.user).to.have.property('email');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -48,13 +78,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"phone\": \"+966501234567\",\n  \"password\": \"Password123!\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\"\n}"
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"phone\": \"+966501234567\",\n  \"password\": \"Password123!\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/auth/register",
               "host": ["{{base_url}}"],
               "path": ["api", "auth", "register"]
-            }
+            },
+            "description": "Register a new user account.\n\n**Request Body:**\n- `email` (string, required): Valid email address\n- `phone` (string, required): Saudi phone number (format: +966XXXXXXXXX)\n- `password` (string, required): Minimum 6 characters, must contain uppercase, lowercase, and number\n- `firstName` (string, required): User's first name (2-50 characters)\n- `lastName` (string, required): User's last name (2-50 characters)"
           }
         },
         {
@@ -64,10 +100,22 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.token) {",
-                  "    pm.collectionVariables.set('admin_token', jsonData.token);",
-                  "}"
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has token', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('token');",
+                  "    if (jsonData.token) {",
+                  "        pm.collectionVariables.set('admin_token', jsonData.token);",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test('User is admin', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.user.role).to.be.oneOf(['admin', 'super_admin']);",
+                  "});"
                 ]
               }
             }
@@ -82,13 +130,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@yourcompany.com\",\n  \"password\": \"AdminSecure123!\"\n}"
+              "raw": "{\n  \"email\": \"admin@yourcompany.com\",\n  \"password\": \"AdminSecure123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/auth/login",
               "host": ["{{base_url}}"],
               "path": ["api", "auth", "login"]
-            }
+            },
+            "description": "Login as admin user.\n\n**Request Body:**\n- `email` (string, required): Admin email\n- `password` (string, required): Admin password"
           }
         },
         {
@@ -98,10 +152,17 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.token) {",
-                  "    pm.collectionVariables.set('user_token', jsonData.token);",
-                  "}"
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has token', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('token');",
+                  "    if (jsonData.token) {",
+                  "        pm.collectionVariables.set('user_token', jsonData.token);",
+                  "    }",
+                  "});"
                 ]
               }
             }
@@ -116,13 +177,630 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\"\n}"
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/auth/login",
               "host": ["{{base_url}}"],
               "path": ["api", "auth", "login"]
+            },
+            "description": "Login as regular user.\n\n**Request Body:**\n- `email` (string, required): User email\n- `password` (string, required): User password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Properties (Public)",
+      "item": [
+        {
+          "name": "Get All Properties",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has properties array', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('properties');",
+                  "    pm.expect(jsonData.data.properties).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Response has pagination', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('pagination');",
+                  "});",
+                  "",
+                  "// Save first property ID for later use",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data.properties.length > 0) {",
+                  "    pm.collectionVariables.set('property_id', jsonData.data.properties[0]._id);",
+                  "}"
+                ]
+              }
             }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/properties?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "properties"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page (1-100, default: 10)"
+                },
+                {
+                  "key": "minInvestment",
+                  "value": "10000",
+                  "disabled": true,
+                  "description": "Minimum investment amount"
+                },
+                {
+                  "key": "maxInvestment",
+                  "value": "1000000",
+                  "disabled": true,
+                  "description": "Maximum investment amount"
+                },
+                {
+                  "key": "minYield",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "Minimum yield percentage"
+                },
+                {
+                  "key": "city",
+                  "value": "riyadh",
+                  "disabled": true,
+                  "description": "Filter by city: riyadh, jeddah, dammam, khobar, mecca, medina"
+                },
+                {
+                  "key": "propertyType",
+                  "value": "residential",
+                  "disabled": true,
+                  "description": "Property type: residential, commercial, retail"
+                }
+              ]
+            },
+            "description": "Get all properties with optional filters.\n\n**Query Parameters:**\n- `page` (number, optional): Page number (default: 1)\n- `limit` (number, optional): Items per page (1-100, default: 10)\n- `minInvestment` (number, optional): Minimum investment filter\n- `maxInvestment` (number, optional): Maximum investment filter\n- `minYield` (number, optional): Minimum yield percentage (0-100)\n- `city` (string, optional): riyadh, jeddah, dammam, khobar, mecca, medina\n- `propertyType` (string, optional): residential, commercial, retail"
+          }
+        },
+        {
+          "name": "Search Properties",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has search results', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('properties');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/properties/search?city=riyadh&propertyType=residential",
+              "host": ["{{base_url}}"],
+              "path": ["api", "properties", "search"],
+              "query": [
+                {
+                  "key": "city",
+                  "value": "riyadh"
+                },
+                {
+                  "key": "propertyType",
+                  "value": "residential"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Search properties with filters. Same parameters as Get All Properties."
+          }
+        },
+        {
+          "name": "Get Property by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has property data', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('property');",
+                  "    pm.expect(jsonData.data.property).to.have.property('_id');",
+                  "    pm.expect(jsonData.data.property).to.have.property('title');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/properties/{{property_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "properties", "{{property_id}}"]
+            },
+            "description": "Get detailed information about a specific property. Requires authentication.\n\n**Path Parameters:**\n- `id` (string, required): Property MongoDB ID"
+          }
+        },
+        {
+          "name": "Invest in Property",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 or 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "pm.test('Investment successful', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shares\": 10,\n  \"paymentMethod\": \"mada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/properties/{{property_id}}/invest",
+              "host": ["{{base_url}}"],
+              "path": ["api", "properties", "{{property_id}}", "invest"]
+            },
+            "description": "Invest in a property. Requires authentication.\n\n**Path Parameters:**\n- `id` (string, required): Property MongoDB ID\n\n**Request Body:**\n- `shares` (number, optional): Number of shares to purchase (min: 1)\n- `units` (number, optional): Number of units to purchase (min: 1)\n- `paymentMethod` (string, optional): Payment method - mada, visa, mastercard, apple_pay, samsung_pay, fake\n\n**Note:** Either `shares` or `units` must be provided."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has user profile', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('user');",
+                  "    pm.expect(jsonData.data.user).to.have.property('email');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "profile"]
+            },
+            "description": "Get current user's profile information. Requires authentication."
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Profile updated successfully', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Smith\",\n  \"phone\": \"+966501234567\",\n  \"address\": {\n    \"street\": \"King Fahd Road\",\n    \"city\": \"Riyadh\"\n  },\n  \"preferences\": {\n    \"language\": \"en\",\n    \"notifications\": {\n      \"email\": true,\n      \"push\": true\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "profile"]
+            },
+            "description": "Update current user's profile. All fields are optional.\n\n**Request Body:**\n- `firstName` (string, optional): First name (2-50 characters)\n- `lastName` (string, optional): Last name (2-50 characters)\n- `phone` (string, optional): Saudi phone number\n- `address.street` (string, optional): Street address (max 200 characters)\n- `address.city` (string, optional): City name (max 50 characters)\n- `preferences.language` (string, optional): en or ar\n- `preferences.notifications.email` (boolean, optional): Email notifications\n- `preferences.notifications.push` (boolean, optional): Push notifications"
+          }
+        },
+        {
+          "name": "Get My Portfolio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has portfolio data', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('portfolio');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/portfolio",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "portfolio"]
+            },
+            "description": "Get current user's investment portfolio. Requires authentication."
+          }
+        },
+        {
+          "name": "Get User Portfolio by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/{{investor_id}}/portfolio",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "{{investor_id}}", "portfolio"]
+            },
+            "description": "Get specific user's portfolio by user ID.\n\n**Path Parameters:**\n- `id` (string, required): User MongoDB ID"
+          }
+        },
+        {
+          "name": "Get User KYC Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has KYC status', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('kycStatus');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/{{investor_id}}/kyc-status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "{{investor_id}}", "kyc-status"]
+            },
+            "description": "Get user's KYC verification status.\n\n**Path Parameters:**\n- `id` (string, required): User MongoDB ID"
+          }
+        }
+      ]
+    },
+    {
+      "name": "KYC",
+      "item": [
+        {
+          "name": "Upload KYC Documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 or 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "pm.test('Upload successful', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});",
+                  "",
+                  "// Save KYC ID if available",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.kyc && jsonData.data.kyc._id) {",
+                  "    pm.collectionVariables.set('kyc_id', jsonData.data.kyc._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nationalId",
+                  "type": "file",
+                  "src": [],
+                  "description": "National ID document (required)"
+                },
+                {
+                  "key": "selfie",
+                  "type": "file",
+                  "src": [],
+                  "description": "Selfie photo (required)"
+                },
+                {
+                  "key": "proofOfIncome",
+                  "type": "file",
+                  "src": [],
+                  "description": "Proof of income document (optional)"
+                },
+                {
+                  "key": "addressProof",
+                  "type": "file",
+                  "src": [],
+                  "description": "Address proof document (optional)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/kyc/upload",
+              "host": ["{{base_url}}"],
+              "path": ["api", "kyc", "upload"]
+            },
+            "description": "Upload KYC verification documents. Requires authentication.\n\n**Form Data:**\n- `nationalId` (file, required): National ID card/passport\n- `selfie` (file, required): Selfie photograph\n- `proofOfIncome` (file, optional): Income verification document\n- `addressProof` (file, optional): Address proof document\n\n**Supported formats:** JPG, PNG, PDF\n**Max file size:** 10MB per file"
+          }
+        },
+        {
+          "name": "Get My KYC Data",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has KYC data', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('kyc');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/kyc",
+              "host": ["{{base_url}}"],
+              "path": ["api", "kyc"]
+            },
+            "description": "Get current user's KYC data. Requires authentication."
+          }
+        },
+        {
+          "name": "Get All KYC Data (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has KYC list', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('kycData');",
+                  "    pm.expect(jsonData.data.kycData).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/kyc/admin/all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "kyc", "admin", "all"]
+            },
+            "description": "Get all KYC submissions. Requires admin/KYC officer role."
+          }
+        },
+        {
+          "name": "Update KYC Status (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('KYC status updated', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"rejectionReason\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/kyc/admin/{{kyc_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "kyc", "admin", "{{kyc_id}}", "status"]
+            },
+            "description": "Update KYC verification status. Requires admin/KYC officer role.\n\n**Path Parameters:**\n- `kycId` (string, required): KYC document MongoDB ID\n\n**Request Body:**\n- `status` (string, required): pending, approved, rejected\n- `rejectionReason` (string, optional): Required if status is 'rejected'"
           }
         }
       ]
@@ -132,6 +810,30 @@
       "item": [
         {
           "name": "Get All Investors",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has investors list', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('investors');",
+                  "    pm.expect(jsonData.data.investors).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Save first investor ID",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data.investors.length > 0) {",
+                  "    pm.collectionVariables.set('investor_id', jsonData.data.investors[0]._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -154,11 +856,29 @@
                   "value": "20"
                 }
               ]
-            }
+            },
+            "description": "Get all investors with pagination. Requires admin authentication."
           }
         },
         {
           "name": "Get Investor by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has investor data', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('investor');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -171,7 +891,8 @@
               "raw": "{{base_url}}/api/admin/investors/{{investor_id}}",
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "investors", "{{investor_id}}"]
-            }
+            },
+            "description": "Get specific investor details. Requires admin authentication.\n\n**Path Parameters:**\n- `id` (string, required): Investor MongoDB ID"
           }
         }
       ]
@@ -180,31 +901,97 @@
       "name": "Admin - Properties",
       "item": [
         {
-          "name": "Get All Properties",
+          "name": "Get All Properties (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has properties', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('properties');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/api/admin/properties",
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "properties"]
-            }
+            },
+            "description": "Get all properties (admin view). Requires admin authentication."
           }
         },
         {
-          "name": "Get Property by ID",
+          "name": "Get Property by ID (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/api/admin/properties/{{property_id}}",
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "properties", "{{property_id}}"]
-            }
+            },
+            "description": "Get property details (admin view).\n\n**Path Parameters:**\n- `id` (string, required): Property MongoDB ID"
           }
         },
         {
           "name": "Create Property",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Property created successfully', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data).to.have.property('property');",
+                  "});",
+                  "",
+                  "// Save created property ID",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.property) {",
+                  "    pm.collectionVariables.set('property_id', jsonData.data.property._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -219,38 +1006,56 @@
                 {
                   "key": "title",
                   "value": "Luxury Villa in Riyadh",
-                  "type": "text"
+                  "type": "text",
+                  "description": "Property title (required)"
                 },
                 {
                   "key": "description",
-                  "value": "Beautiful modern villa with 5 bedrooms",
-                  "type": "text"
+                  "value": "Beautiful modern villa with 5 bedrooms, swimming pool, and garden in prestigious Al Narjis district",
+                  "type": "text",
+                  "description": "Property description (required)"
                 },
                 {
                   "key": "propertyType",
                   "value": "residential",
-                  "type": "text"
+                  "type": "text",
+                  "description": "residential, commercial, or retail (required)"
                 },
                 {
                   "key": "status",
                   "value": "active",
-                  "type": "text"
+                  "type": "text",
+                  "description": "active, draft, or sold (required)"
                 },
                 {
                   "key": "location",
-                  "value": "{\"city\":\"Riyadh\",\"district\":\"Al Narjis\",\"address\":\"123 Street\"}",
-                  "type": "text"
+                  "value": "{\"city\":\"Riyadh\",\"district\":\"Al Narjis\",\"address\":\"123 King Fahd Road\",\"coordinates\":{\"lat\":24.7136,\"lng\":46.6753}}",
+                  "type": "text",
+                  "description": "Location object (JSON string, required)"
                 },
                 {
                   "key": "financials",
-                  "value": "{\"totalValue\":2000000,\"pricePerShare\":5000,\"totalShares\":400,\"availableShares\":400,\"projectedYield\":8.5}",
-                  "type": "text"
+                  "value": "{\"totalValue\":2000000,\"pricePerShare\":5000,\"totalShares\":400,\"availableShares\":400,\"projectedYield\":8.5,\"minInvestment\":10000}",
+                  "type": "text",
+                  "description": "Financial details (JSON string, required)"
+                },
+                {
+                  "key": "features",
+                  "value": "{\"bedrooms\":5,\"bathrooms\":6,\"area\":500,\"parkingSpaces\":3,\"amenities\":[\"Pool\",\"Garden\",\"Gym\",\"Security\"]}",
+                  "type": "text",
+                  "description": "Property features (JSON string, optional)"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": [],
+                  "description": "Property images (multiple files, optional)"
                 },
                 {
                   "key": "otp",
                   "value": "123456",
                   "type": "text",
-                  "description": "Get OTP from email"
+                  "description": "OTP code from email (required)"
                 }
               ]
             },
@@ -258,7 +1063,146 @@
               "raw": "{{base_url}}/api/admin/properties",
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "properties"]
+            },
+            "description": "Create a new property. Requires admin authentication and OTP verification.\n\n**Form Data:**\n- `title` (string, required): Property title\n- `description` (string, required): Detailed description\n- `propertyType` (string, required): residential, commercial, retail\n- `status` (string, required): active, draft, sold\n- `location` (JSON string, required): {city, district, address, coordinates}\n- `financials` (JSON string, required): {totalValue, pricePerShare, totalShares, availableShares, projectedYield, minInvestment}\n- `features` (JSON string, optional): {bedrooms, bathrooms, area, parkingSpaces, amenities[]}\n- `images` (files, optional): Property images\n- `otp` (string, required): OTP code sent to admin email"
+          }
+        },
+        {
+          "name": "Update Property",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Property updated successfully', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ]
+              }
             }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "Updated Luxury Villa in Riyadh",
+                  "type": "text",
+                  "description": "Property title (optional)"
+                },
+                {
+                  "key": "description",
+                  "value": "Updated description - Beautiful modern villa with 5 bedrooms, swimming pool, garden, and gym in prestigious Al Narjis district",
+                  "type": "text",
+                  "description": "Property description (optional)"
+                },
+                {
+                  "key": "propertyType",
+                  "value": "residential",
+                  "type": "text",
+                  "description": "residential, commercial, or retail (optional)"
+                },
+                {
+                  "key": "status",
+                  "value": "active",
+                  "type": "text",
+                  "description": "active, draft, or sold (optional)"
+                },
+                {
+                  "key": "location",
+                  "value": "{\"city\":\"Riyadh\",\"district\":\"Al Narjis\",\"address\":\"456 King Fahd Road\",\"coordinates\":{\"lat\":24.7136,\"lng\":46.6753}}",
+                  "type": "text",
+                  "description": "Location object (JSON string, optional) - {city, district, address, coordinates}"
+                },
+                {
+                  "key": "financials",
+                  "value": "{\"totalValue\":2500000,\"pricePerShare\":6000,\"totalShares\":400,\"availableShares\":350,\"projectedYield\":9.0,\"minInvestment\":12000}",
+                  "type": "text",
+                  "description": "Financial details (JSON string, optional) - {totalValue, pricePerShare, totalShares, availableShares, projectedYield, minInvestment}"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": [],
+                  "description": "Additional property images (multiple files, optional) - will be added to existing images"
+                },
+                {
+                  "key": "otp",
+                  "value": "",
+                  "type": "text",
+                  "description": "OTP code from email (leave empty on first call to receive OTP, then fill with OTP code)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/properties/{{property_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "properties", "{{property_id}}"]
+            },
+            "description": "Update an existing property. Requires super admin or property manager role and OTP verification.\n\n**Two-Step Process:**\n1. **First call (without OTP)**: Leave OTP field empty - system will send OTP to your admin email\n2. **Second call (with OTP)**: Fill in the OTP code received via email to complete the update\n\n**Path Parameters:**\n- `id` (string, required): Property MongoDB ID\n\n**Form Data (all optional except OTP for final step):**\n- `title` (string, optional): Updated property title\n- `description` (string, optional): Updated description\n- `propertyType` (string, optional): residential, commercial, retail\n- `status` (string, optional): active, draft, sold\n- `location` (JSON string, optional): {city, district, address, coordinates}\n- `financials` (JSON string, optional): {totalValue, pricePerShare, totalShares, availableShares, projectedYield, minInvestment}\n- `images` (files, optional): Additional property images (will be added to existing images)\n- `otp` (string, required for final update): OTP code sent to admin email\n\n**Example workflow:**\n1. First call without OTP:\n   - Response: {success: true, message: \"OTP sent successfully\", data: {step: \"otp_required\", ...}}\n2. Check your email for OTP code\n3. Second call with same data + OTP:\n   - Response: {success: true, message: \"Property updated successfully\", ...}"
+          }
+        },
+        {
+          "name": "Delete Property",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Property deleted successfully', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/properties/{{property_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "properties", "{{property_id}}"]
+            },
+            "description": "Delete a property. Requires super admin or property manager role and OTP verification.\n\n**Two-Step Process:**\n1. **First call (without OTP)**: Send empty OTP - system will send OTP to your admin email\n2. **Second call (with OTP)**: Provide OTP code to confirm deletion\n\n**Path Parameters:**\n- `id` (string, required): Property MongoDB ID\n\n**Request Body:**\n- `otp` (string, required for final deletion): Leave empty on first call, then provide OTP from email"
           }
         }
       ]
@@ -268,6 +1212,24 @@
       "item": [
         {
           "name": "Get All Transactions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has transactions', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('transactions');",
+                  "    pm.expect(jsonData.data.transactions).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -280,7 +1242,8 @@
               "raw": "{{base_url}}/api/admin/transactions",
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "transactions"]
-            }
+            },
+            "description": "Get all transactions. Requires admin authentication."
           }
         }
       ]
@@ -290,6 +1253,23 @@
       "item": [
         {
           "name": "Calculate Investment Returns",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has calculation data', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('calculation');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -300,17 +1280,41 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"investmentAmount\": 50000\n}"
+              "raw": "{\n  \"investmentAmount\": 50000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/investments/calculate",
               "host": ["{{base_url}}"],
               "path": ["api", "investments", "calculate"]
-            }
+            },
+            "description": "Calculate potential investment returns.\n\n**Request Body:**\n- `investmentAmount` (number, required): Amount to invest (SAR)"
           }
         },
         {
           "name": "Create Investment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 or 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "pm.test('Investment created', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -325,17 +1329,41 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"propertyId\": \"{{property_id}}\",\n  \"shares\": 10,\n  \"amount\": 50000\n}"
+              "raw": "{\n  \"propertyId\": \"{{property_id}}\",\n  \"shares\": 10,\n  \"amount\": 50000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/investments",
               "host": ["{{base_url}}"],
               "path": ["api", "investments"]
-            }
+            },
+            "description": "Create a new investment. Requires authentication.\n\n**Request Body:**\n- `propertyId` (string, required): Property MongoDB ID\n- `shares` (number, required): Number of shares to purchase\n- `amount` (number, required): Investment amount (SAR)"
           }
         },
         {
           "name": "Get My Investments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has investments', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('investments');",
+                  "    pm.expect(jsonData.data.investments).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -348,7 +1376,8 @@
               "raw": "{{base_url}}/api/investments/my-investments",
               "host": ["{{base_url}}"],
               "path": ["api", "investments", "my-investments"]
-            }
+            },
+            "description": "Get current user's investments. Requires authentication."
           }
         }
       ]
@@ -358,6 +1387,23 @@
       "item": [
         {
           "name": "Get Wallet Balance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has balance', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('balance');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -370,11 +1416,30 @@
               "raw": "{{base_url}}/api/wallet/balance",
               "host": ["{{base_url}}"],
               "path": ["api", "wallet", "balance"]
-            }
+            },
+            "description": "Get current user's wallet balance. Requires authentication."
           }
         },
         {
           "name": "Get Wallet Transactions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has transactions', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('transactions');",
+                  "    pm.expect(jsonData.data.transactions).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -387,7 +1452,8 @@
               "raw": "{{base_url}}/api/wallet/transactions",
               "host": ["{{base_url}}"],
               "path": ["api", "wallet", "transactions"]
-            }
+            },
+            "description": "Get current user's wallet transaction history. Requires authentication."
           }
         }
       ]
