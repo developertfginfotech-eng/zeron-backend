@@ -186,7 +186,48 @@ const userSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
-  }]
+  }],
+
+  // Profile completion data from wizard
+  profileData: {
+    investmentProfile: {
+      experience: String,
+      riskTolerance: String,
+      investmentGoals: String,
+      preferredTypes: [String],
+      investmentAmount: String,
+      timeline: String,
+      completed: { type: Boolean, default: false }
+    },
+    bankingDetails: {
+      bankName: String,
+      iban: String,
+      accountHolder: String,
+      swiftCode: String,
+      accountType: String,
+      completed: { type: Boolean, default: false }
+    },
+    communicationPreferences: {
+      emailNotifications: Boolean,
+      smsAlerts: Boolean,
+      languagePreference: String,
+      timezone: String,
+      marketingEmails: Boolean,
+      monthlyReports: Boolean,
+      completed: { type: Boolean, default: false }
+    },
+    employmentPortfolio: {
+      employmentStatus: String,
+      employer: String,
+      jobTitle: String,
+      monthlySalary: String,
+      hasInvestmentPortfolio: Boolean,
+      portfolioValue: String,
+      completed: { type: Boolean, default: false }
+    },
+    profileCompleted: { type: Boolean, default: false },
+    profileCompletedAt: Date
+  }
 }, {
   timestamps: true,
   toJSON: {
