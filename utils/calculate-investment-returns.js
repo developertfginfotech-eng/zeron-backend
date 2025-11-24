@@ -13,6 +13,23 @@ function calculateInvestmentReturns(investment) {
 
   // ==================== TEST MODE (REMOVE BEFORE PRODUCTION) ====================
   // Accelerated time: 1 hour = 1 year
+  // Don't calculate returns until at least 1 hour (1 year) has passed
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+  if (holdingPeriodMs < ONE_HOUR_MS) {
+    // Investment is less than 1 hour old - no returns yet
+    return {
+      principalAmount,
+      holdingPeriodYears: 0,
+      rentalYieldEarned: 0,
+      appreciationGain: 0,
+      currentValue: principalAmount,
+      withdrawalValue: principalAmount,
+      totalReturns: 0,
+      isAfterMaturity: false,
+      maturityDate: maturityDate ? maturityDate.toISOString() : null
+    };
+  }
+
   const holdingPeriodYears = holdingPeriodMs / (60 * 60 * 1000); // 1 hour = 1 year
 
   // Real time calculation (uncomment for production):
