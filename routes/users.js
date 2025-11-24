@@ -57,10 +57,16 @@ router.get('/profile',
 );
 
 // PUT /api/users/profile - Update user profile
-router.put('/profile', 
+router.put('/profile',
   authenticate,
   profileUpdateValidation,
   userController.updateProfile
+);
+
+// POST /api/users/profile/complete - Save complete profile data from wizard
+router.post('/profile/complete',
+  authenticate,
+  userController.saveCompleteProfile
 );
 
 // GET /api/users/portfolio - Get current user's portfolio

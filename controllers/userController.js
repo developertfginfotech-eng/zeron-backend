@@ -125,6 +125,122 @@ class UserController {
     }
   }
 
+  // Save complete profile data from wizard
+  async saveCompleteProfile(req, res) {
+    try {
+      const userId = req.user.id;
+      const {
+        // Investment Profile
+        experience,
+        riskTolerance,
+        investmentGoals,
+        preferredTypes,
+        investmentAmount,
+        timeline,
+        // Banking Details
+        bankName,
+        iban,
+        accountHolder,
+        swiftCode,
+        accountType,
+        // Communication Preferences
+        emailNotifications,
+        smsAlerts,
+        languagePreference,
+        timezone,
+        marketingEmails,
+        monthlyReports,
+        // Employment & Portfolio
+        employmentStatus,
+        employer,
+        jobTitle,
+        monthlySalary,
+        hasInvestmentPortfolio,
+        portfolioValue
+      } = req.body;
+
+      // Structure the profile data
+      const profileData = {
+        investmentProfile: {
+          experience,
+          riskTolerance,
+          investmentGoals,
+          preferredTypes,
+          investmentAmount,
+          timeline,
+          completed: true
+        },
+        bankingDetails: {
+          bankName,
+          iban,
+          accountHolder,
+          swiftCode,
+          accountType,
+          completed: true
+        },
+        communicationPreferences: {
+          emailNotifications,
+          smsAlerts,
+          languagePreference,
+          timezone,
+          marketingEmails,
+          monthlyReports,
+          completed: true
+        },
+        employmentPortfolio: {
+          employmentStatus,
+          employer,
+          jobTitle,
+          monthlySalary,
+          hasInvestmentPortfolio,
+          portfolioValue,
+          completed: true
+        },
+        profileCompleted: true,
+        profileCompletedAt: new Date()
+      };
+
+      const user = await User.findByIdAndUpdate(
+        userId,
+        {
+          profileData,
+          updatedAt: new Date()
+        },
+        { new: true, runValidators: true }
+      ).select('-password');
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      logger.info(`Profile completed successfully - User: ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'Profile completed successfully',
+        data: {
+          user: {
+            id: user._id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            profileData: user.profileData
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Save complete profile error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error saving profile data',
+        error: error.message
+      });
+    }
+  }
+
   // Simple KYC status check
   async getCurrentKycStatus(req, res) {
     try {
@@ -517,6 +633,7 @@ const userController = new UserController();
 module.exports = {
   getProfile: userController.getProfile.bind(userController),
   updateProfile: userController.updateProfile.bind(userController),
+  saveCompleteProfile: userController.saveCompleteProfile.bind(userController),
   getCurrentKycStatus: userController.getCurrentKycStatus.bind(userController),
   getCurrentUserPortfolio: userController.getCurrentUserPortfolio.bind(userController),
   getUserPortfolio: userController.getUserPortfolio.bind(userController),
