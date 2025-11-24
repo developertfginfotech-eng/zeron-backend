@@ -70,10 +70,23 @@ router.get('/portfolio',
 );
 
 // GET /api/users/:id/portfolio - Get specific user's portfolio
-router.get('/:id/portfolio', 
+router.get('/:id/portfolio',
   authenticate,
   userIdValidation,
   userController.getUserPortfolio
+);
+
+// GET /api/users/portfolio/consolidated - Get current user's consolidated portfolio (grouped by property)
+router.get('/portfolio/consolidated',
+  authenticate,
+  userController.getConsolidatedPortfolio
+);
+
+// GET /api/users/:id/portfolio/consolidated - Get specific user's consolidated portfolio (grouped by property)
+router.get('/:id/portfolio/consolidated',
+  authenticate,
+  userIdValidation,
+  userController.getConsolidatedPortfolio
 );
 
 // GET /api/users/:id/kyc-status - Get user's KYC status
