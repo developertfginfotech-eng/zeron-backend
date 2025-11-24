@@ -195,14 +195,9 @@ router.post('/',
       const penalty = propertySettings.earlyWithdrawalPenaltyPercentage !== null ? propertySettings.earlyWithdrawalPenaltyPercentage : settings.earlyWithdrawalPenaltyPercentage;
       const maturityPeriod = propertySettings.lockingPeriodYears !== null ? propertySettings.lockingPeriodYears : settings.maturityPeriodYears;
 
-      // ==================== TEST MODE (REMOVE BEFORE PRODUCTION) ====================
-      // Accelerated maturity: maturityPeriod hours instead of years
-      // Comment out this line to use real time
-      const maturityDateMs = Date.now() + maturityPeriod * 60 * 60 * 1000; // hours
-
-      // Real time calculation (uncomment for production):
-      // const maturityDateMs = Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000; // years
-      // ==================== END TEST MODE ====================
+      // Maturity date in real years (display purposes)
+      // NOTE: Returns calculation uses accelerated time (1 hour = 1 year) for testing
+      const maturityDateMs = Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000; // years
 
       // Create investment
       const investment = new Investment({
