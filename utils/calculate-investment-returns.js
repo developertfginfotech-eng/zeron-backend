@@ -42,18 +42,22 @@ function calculateInvestmentReturns(investment) {
     }
   }
 
-  // Calculate current value (what user would get if withdrawn now)
-  let currentValue;
+  // Calculate current value for display (without penalty)
+  // Penalty is only applied during actual withdrawal, not for display purposes
+  const currentValue = principalAmount + rentalYieldEarned + appreciationGain;
+
+  // Calculate withdrawal value (what user would get if withdrawn now)
+  let withdrawalValue;
   if (isAfterMaturity) {
     // After maturity: no penalty
-    currentValue = principalAmount + rentalYieldEarned + appreciationGain;
+    withdrawalValue = principalAmount + rentalYieldEarned + appreciationGain;
   } else {
     // Before maturity: apply early withdrawal penalty
     const penalty = principalAmount * (penaltyRate / 100);
-    currentValue = principalAmount + rentalYieldEarned - penalty;
+    withdrawalValue = principalAmount + rentalYieldEarned - penalty;
   }
 
-  // Total returns (unrealized)
+  // Total returns (unrealized) - based on current value without penalty
   const totalReturns = currentValue - principalAmount;
 
   return {
@@ -62,6 +66,7 @@ function calculateInvestmentReturns(investment) {
     rentalYieldEarned: parseFloat(rentalYieldEarned.toFixed(2)),
     appreciationGain: parseFloat(appreciationGain.toFixed(2)),
     currentValue: parseFloat(currentValue.toFixed(2)),
+    withdrawalValue: parseFloat(withdrawalValue.toFixed(2)),
     totalReturns: parseFloat(totalReturns.toFixed(2)),
     isAfterMaturity,
     maturityDate: maturityDate ? maturityDate.toISOString() : null

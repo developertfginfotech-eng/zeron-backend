@@ -30,7 +30,6 @@ router.get('/my-investments', authenticate, async (req, res) => {
         const calculatedReturns = calculateInvestmentReturns(inv);
 
         return {
-          id: inv._id,
           _id: inv._id,
           propertyId: inv.property._id,
           propertyName: inv.property.title,
