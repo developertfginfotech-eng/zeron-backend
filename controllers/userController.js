@@ -349,6 +349,116 @@ class UserController {
     }
   }
 
+  // NEW: Get consolidated portfolio - groups multiple purchases of same property
+  async getConsolidatedPortfolio(req, res) {
+    try {
+      const { calculateInvestmentReturns } = require('../utils/calculate-investment-returns');
+      const userId = req.params.id || req.user.id;
+
+      const investments = await Investment.find({
+        user: userId,
+        status: 'confirmed'
+      })
+      .populate('property', 'title titleAr location financials images status propertyType investmentTerms')
+      .lean();
+
+      // Group investments by property ID
+      const groupedByProperty = {};
+
+      investments.forEach(investment => {
+        const propertyId = investment.property._id.toString();
+
+        if (!groupedByProperty[propertyId]) {
+          groupedByProperty[propertyId] = {
+            property: investment.property,
+            investments: [],
+            totalUnits: 0,
+            totalInvested: 0,
+            totalCurrentValue: 0,
+            totalReturns: 0
+          };
+        }
+
+        // Calculate returns for this specific investment
+        const returns = calculateInvestmentReturns(investment);
+
+        groupedByProperty[propertyId].investments.push({
+          investmentId: investment._id,
+          units: investment.shares,
+          amount: investment.amount,
+          currentValue: returns.currentValue,
+          returns: returns.totalReturns,
+          rate: investment.amount > 0 ? ((returns.totalReturns / investment.amount) * 100).toFixed(2) : 0,
+          investedOn: investment.createdAt,
+          maturesOn: investment.maturityDate
+        });
+
+        groupedByProperty[propertyId].totalUnits += investment.shares;
+        groupedByProperty[propertyId].totalInvested += investment.amount;
+        groupedByProperty[propertyId].totalCurrentValue += returns.currentValue;
+        groupedByProperty[propertyId].totalReturns += returns.totalReturns;
+      });
+
+      // Convert grouped object to array and calculate consolidated metrics
+      const consolidatedInvestments = Object.values(groupedByProperty).map(group => {
+        const rate = group.totalInvested > 0
+          ? ((group.totalReturns / group.totalInvested) * 100).toFixed(2)
+          : 0;
+
+        return {
+          property: {
+            id: group.property._id,
+            title: group.property.title,
+            titleAr: group.property.titleAr,
+            location: group.property.location,
+            image: group.property.images?.[0]?.url,
+            status: group.property.status,
+            propertyType: group.property.propertyType
+          },
+          consolidated: {
+            totalUnits: group.totalUnits,
+            totalInvested: group.totalInvested,
+            totalCurrentValue: parseFloat(group.totalCurrentValue.toFixed(2)),
+            totalReturns: parseFloat(group.totalReturns.toFixed(2)),
+            rate: parseFloat(rate),
+            numberOfPurchases: group.investments.length,
+            firstInvestment: group.investments[0]?.investedOn,
+            latestInvestment: group.investments[group.investments.length - 1]?.investedOn
+          },
+          purchases: group.investments // Individual purchase details
+        };
+      });
+
+      // Calculate overall summary
+      const summary = {
+        totalProperties: consolidatedInvestments.length,
+        totalInvested: consolidatedInvestments.reduce((sum, inv) => sum + inv.consolidated.totalInvested, 0),
+        totalCurrentValue: consolidatedInvestments.reduce((sum, inv) => sum + inv.consolidated.totalCurrentValue, 0),
+        totalReturns: consolidatedInvestments.reduce((sum, inv) => sum + inv.consolidated.totalReturns, 0),
+        totalUnits: consolidatedInvestments.reduce((sum, inv) => sum + inv.consolidated.totalUnits, 0)
+      };
+
+      summary.overallRate = summary.totalInvested > 0
+        ? ((summary.totalReturns / summary.totalInvested) * 100).toFixed(2)
+        : 0;
+
+      res.json({
+        success: true,
+        data: {
+          summary,
+          investments: consolidatedInvestments
+        }
+      });
+    } catch (error) {
+      logger.error('Get consolidated portfolio error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching consolidated portfolio',
+        error: error.message
+      });
+    }
+  }
+
   async getKycStatus(req, res) {
     try {
       const errors = validationResult(req);
@@ -410,5 +520,6 @@ module.exports = {
   getCurrentKycStatus: userController.getCurrentKycStatus.bind(userController),
   getCurrentUserPortfolio: userController.getCurrentUserPortfolio.bind(userController),
   getUserPortfolio: userController.getUserPortfolio.bind(userController),
+  getConsolidatedPortfolio: userController.getConsolidatedPortfolio.bind(userController),
   getKycStatus: userController.getKycStatus.bind(userController)
 };
