@@ -999,6 +999,7 @@ try {
         location,
         propertyType,
         financials,
+        investmentTerms,
         status,
         otp,
       } = req.body;
@@ -1006,6 +1007,7 @@ try {
       // Parse JSON fields
       let parsedLocation = {};
       let parsedFinancials = {};
+      let parsedInvestmentTerms = {};
 
       try {
         parsedLocation =
@@ -1014,11 +1016,15 @@ try {
           typeof financials === "string"
             ? JSON.parse(financials)
             : financials || {};
+        parsedInvestmentTerms =
+          typeof investmentTerms === "string"
+            ? JSON.parse(investmentTerms)
+            : investmentTerms || {};
       } catch (parseError) {
         console.error("Error parsing JSON fields:", parseError);
         return res.status(400).json({
           success: false,
-          message: "Invalid JSON in location or financials fields",
+          message: "Invalid JSON in location, financials, or investmentTerms fields",
         });
       }
 
@@ -1111,6 +1117,7 @@ try {
         description: description || existingProperty.description,
         location: parsedLocation,
         financials: parsedFinancials,
+        investmentTerms: parsedInvestmentTerms,
         propertyType: propertyType || existingProperty.propertyType,
         status: status || existingProperty.status,
         updatedAt: new Date(),
@@ -1774,200 +1781,6 @@ try {
         success: false,
         message: "Error updating KYC status",
         error: error.message,
-      });
-    }
-  }
-
-  
-
-  async updateProperty(req, res) {
-    try {
-      console.log("=== UPDATE PROPERTY WITH DATABASE OTP ===");
-      console.log("Property ID:", req.params.id);
-      console.log("Body:", req.body);
-
-      const { id } = req.params;
-      const userId = req.user.id;
-
-      // Add null check for user
-      const user = await User.findById(userId);
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: "User not found. Please log in again.",
-        });
-      }
-
-      // Extract fields from request
-      const {
-        title,
-        description,
-        location,
-        propertyType,
-        financials,
-        status,
-        otp,
-      } = req.body;
-
-      // Parse JSON fields
-      let parsedLocation = {};
-      let parsedFinancials = {};
-
-      try {
-        parsedLocation =
-          typeof location === "string" ? JSON.parse(location) : location || {};
-        parsedFinancials =
-          typeof financials === "string"
-            ? JSON.parse(financials)
-            : financials || {};
-      } catch (parseError) {
-        console.error("Error parsing JSON fields:", parseError);
-        return res.status(400).json({
-          success: false,
-          message: "Invalid JSON in location or financials fields",
-        });
-      }
-
-      // If OTP is not provided, send OTP and return
-      if (!otp) {
-        try {
-          // Get existing property for email
-          const existingProperty = await Property.findById(id);
-          if (!existingProperty) {
-            return res.status(404).json({
-              success: false,
-              message: "Property not found",
-            });
-          }
-
-          const emailResult = await otpEmailService.sendOTP({
-            operation: "update",
-            propertyData: {
-              title: title || existingProperty.title,
-              propertyType: propertyType || existingProperty.propertyType,
-            },
-            adminUser: user,
-            propertyId: id,
-          });
-
-          console.log("OTP sent for update operation:", emailResult.otpId);
-
-          return res.status(200).json({
-            success: true,
-            message: "OTP sent successfully",
-            data: {
-              step: "otp_required",
-              message: emailResult.fallbackMode
-                ? "Check console for OTP code (email service unavailable)"
-                : "Check your email for OTP code",
-              expiresIn: "10 minutes",
-              sentTo: emailResult.sentTo,
-              otpId: emailResult.otpId,
-            },
-          });
-        } catch (otpError) {
-          console.error("OTP sending failed:", otpError);
-          logger.error("OTP sending failed:", otpError);
-          return res.status(500).json({
-            success: false,
-            message: "Failed to send OTP. Please try again.",
-            error:
-              process.env.NODE_ENV === "development"
-                ? otpError.message
-                : undefined,
-          });
-        }
-      }
-
-      // If OTP is provided, verify it
-      if (otp) {
-        const verification = await otpEmailService.verifyOTP(
-          userId,
-          otp,
-          "update"
-        );
-
-        if (!verification.valid) {
-          return res.status(400).json({
-            success: false,
-            message: verification.reason,
-            attemptsRemaining: verification.attemptsRemaining,
-          });
-        }
-
-        console.log(
-          `OTP verified successfully for update operation - User: ${userId}`
-        );
-        logger.info(
-          `OTP verified successfully for update operation - User: ${userId}, OTP ID: ${verification.otpRecord._id}`
-        );
-      }
-
-      // Continue with property update after OTP verification
-      const existingProperty = await Property.findById(id);
-      if (!existingProperty) {
-        return res.status(404).json({
-          success: false,
-          message: "Property not found",
-        });
-      }
-
-      // Prepare update data
-      const updateData = {
-        title: title || existingProperty.title,
-        description: description || existingProperty.description,
-        location: parsedLocation,
-        financials: parsedFinancials,
-        propertyType: propertyType || existingProperty.propertyType,
-        status: status || existingProperty.status,
-        updatedAt: new Date(),
-      };
-
-      // Handle image uploads if any
-      if (req.files && req.files.length > 0) {
-        const newImages = req.files.map((file, index) => ({
-          url: `/uploads/${file.filename}`,
-          alt: `${updateData.title} - Image ${index + 1}`,
-          isPrimary: index === 0,
-          _id: new mongoose.Types.ObjectId(),
-        }));
-
-        // Keep existing images and add new ones
-        updateData.images = [...(existingProperty.images || []), ...newImages];
-      }
-
-      // Update the property
-      const updatedProperty = await Property.findByIdAndUpdate(id, updateData, {
-        new: true,
-      });
-
-      logger.info(
-        `Property updated successfully - ID: ${updatedProperty._id}, Title: ${updatedProperty.title}, Updated by: ${userId}`
-      );
-
-      res.status(200).json({
-        success: true,
-        message: "Property updated successfully",
-        data: {
-          id: updatedProperty._id,
-          title: updatedProperty.title,
-          status: updatedProperty.status,
-        },
-      });
-    } catch (error) {
-      console.error("Update property error:", error);
-
-      logger.error("Update property error:", {
-        error: error.message,
-        stack: error.stack,
-        userId: req.user?.id,
-      });
-
-      res.status(500).json({
-        success: false,
-        message: "Error updating property",
-        error:
-          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
