@@ -57,7 +57,6 @@ router.get('/my-investments', authenticate, async (req, res) => {
           lockInEndDate: inv.lockInEndDate,
           isInLockInPeriod: inv.isInLockInPeriod || false,
           hasMatured: inv.hasMatured || false,
-          maturityDate: inv.maturityDate,
           maturityPeriodYears: inv.maturityPeriodYears || 5,
           property: inv.property
         };
@@ -463,8 +462,8 @@ router.post('/calculate', async (req, res) => {
   }
 });
 
-// Withdraw investment
-router.post('/:id/withdraw', authenticate, async (req, res) => {
+// Withdraw investment (bond-break or normal withdrawal)
+router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
   try {
     const investment = await Investment.findById(req.params.id).populate('property', 'title');
 
@@ -500,7 +499,7 @@ router.post('/:id/withdraw', authenticate, async (req, res) => {
 
     const now = new Date();
     const investmentDate = new Date(investment.createdAt);
-    const maturityDate = investment.maturityDate ? new Date(investment.maturityDate) : null;
+    const maturityDate = investment.bondMaturityDate ? new Date(investment.bondMaturityDate) : null;
 
     // Calculate holding period in years
     const holdingPeriodMs = now - investmentDate;
