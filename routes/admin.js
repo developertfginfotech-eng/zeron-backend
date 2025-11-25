@@ -146,4 +146,83 @@ router.post('/admin-users', authorize('super_admin'), [
   body('password').optional().isLength({ min: 8 })
 ], adminController.createAdminUser);
 
+// ========== RBAC - ROLE MANAGEMENT ROUTES (Super Admin Only) ==========
+
+// Get all roles
+router.get('/roles', authorize('super_admin'), adminController.getRoles);
+
+// Get specific role by ID
+router.get('/roles/:id', authorize('super_admin'), adminController.getRoleById);
+
+// Create new role
+router.post('/roles', authorize('super_admin'), [
+  body('name').trim().isLength({ min: 2 }).withMessage('Role name must be at least 2 characters'),
+  body('displayName').trim().isLength({ min: 2 }).withMessage('Display name must be at least 2 characters'),
+  body('description').optional().trim(),
+  body('permissions').isArray().withMessage('Permissions must be an array')
+], adminController.createRole);
+
+// Update role
+router.put('/roles/:id', authorize('super_admin'), [
+  body('displayName').optional().trim().isLength({ min: 2 }),
+  body('description').optional().trim(),
+  body('permissions').optional().isArray()
+], adminController.updateRole);
+
+// Delete role (only if no users assigned)
+router.delete('/roles/:id', authorize('super_admin'), adminController.deleteRole);
+
+// Assign role to user
+router.post('/users/:userId/assign-role', authorize('super_admin'), [
+  body('roleId').isMongoId().withMessage('Valid role ID required')
+], adminController.assignRoleToUser);
+
+// Remove role from user
+router.delete('/users/:userId/remove-role', authorize('super_admin'), adminController.removeRoleFromUser);
+
+// ========== RBAC - GROUP MANAGEMENT ROUTES (Super Admin Only) ==========
+
+// Get all groups
+router.get('/groups', authorize('super_admin'), adminController.getGroups);
+
+// Get specific group by ID with members
+router.get('/groups/:id', authorize('super_admin'), adminController.getGroupById);
+
+// Create new group
+router.post('/groups', authorize('super_admin'), [
+  body('name').trim().isLength({ min: 2 }).withMessage('Group name must be at least 2 characters'),
+  body('displayName').trim().isLength({ min: 2 }).withMessage('Display name must be at least 2 characters'),
+  body('description').optional().trim(),
+  body('permissions').isArray().withMessage('Permissions must be an array'),
+  body('defaultRole').optional().isMongoId().withMessage('Valid role ID required')
+], adminController.createGroup);
+
+// Update group
+router.put('/groups/:id', authorize('super_admin'), [
+  body('displayName').optional().trim().isLength({ min: 2 }),
+  body('description').optional().trim(),
+  body('permissions').optional().isArray(),
+  body('defaultRole').optional().isMongoId()
+], adminController.updateGroup);
+
+// Delete group
+router.delete('/groups/:id', authorize('super_admin'), adminController.deleteGroup);
+
+// Add user to group
+router.post('/groups/:groupId/add-member', authorize('super_admin'), [
+  body('userId').isMongoId().withMessage('Valid user ID required')
+], adminController.addUserToGroup);
+
+// Remove user from group
+router.delete('/groups/:groupId/remove-member/:userId', authorize('super_admin'), adminController.removeUserFromGroup);
+
+// Get all users with their roles and groups
+router.get('/rbac/users', authorize('super_admin'), adminController.getUsersWithRBAC);
+
+// Get user's effective permissions
+router.get('/users/:userId/permissions', authorize('super_admin'), adminController.getUserPermissions);
+
+// Initialize default roles (one-time setup)
+router.post('/rbac/initialize', authorize('super_admin'), adminController.initializeDefaultRoles);
+
 module.exports = router;

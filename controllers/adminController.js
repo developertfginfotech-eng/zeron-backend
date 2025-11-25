@@ -2882,5 +2882,674 @@ try {
     }
   }
 
+  // ========== RBAC - ROLE MANAGEMENT METHODS ==========
+
+  async getRoles(req, res) {
+    try {
+      const Role = require('../models/Role');
+
+      const roles = await Role.find()
+        .select('-__v')
+        .sort('displayName')
+        .lean();
+
+      // Get user count for each role
+      const rolesWithCounts = await Promise.all(roles.map(async (role) => {
+        const userCount = await User.countDocuments({ assignedRole: role._id });
+        return {
+          ...role,
+          userCount
+        };
+      }));
+
+      logger.info(`Admin fetched roles - Admin: ${req.user.id}`);
+
+      res.json({
+        success: true,
+        data: rolesWithCounts
+      });
+    } catch (error) {
+      logger.error('Get roles error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching roles',
+        error: error.message
+      });
+    }
+  }
+
+  async getRoleById(req, res) {
+    try {
+      const Role = require('../models/Role');
+      const { id } = req.params;
+
+      const role = await Role.findById(id);
+
+      if (!role) {
+        return res.status(404).json({
+          success: false,
+          message: 'Role not found'
+        });
+      }
+
+      // Get users with this role
+      const users = await User.find({ assignedRole: id })
+        .select('firstName lastName email position department')
+        .lean();
+
+      res.json({
+        success: true,
+        data: {
+          ...role.toObject(),
+          users
+        }
+      });
+    } catch (error) {
+      logger.error('Get role by ID error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching role',
+        error: error.message
+      });
+    }
+  }
+
+  async createRole(req, res) {
+    try {
+      const Role = require('../models/Role');
+      const errors = validationResult(req);
+
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: errors.array()
+        });
+      }
+
+      const { name, displayName, description, permissions } = req.body;
+
+      // Check if role with this name already exists
+      const existingRole = await Role.findOne({ name: name.toLowerCase().replace(/\s+/g, '_') });
+
+      if (existingRole) {
+        return res.status(400).json({
+          success: false,
+          message: 'Role with this name already exists'
+        });
+      }
+
+      const role = await Role.create({
+        name: name.toLowerCase().replace(/\s+/g, '_'),
+        displayName,
+        description,
+        permissions,
+        createdBy: req.user.id,
+        isSystemRole: false
+      });
+
+      logger.info(`Admin created role - Admin: ${req.user.id}, Role: ${role.name}`);
+
+      res.status(201).json({
+        success: true,
+        message: 'Role created successfully',
+        data: role
+      });
+    } catch (error) {
+      logger.error('Create role error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating role',
+        error: error.message
+      });
+    }
+  }
+
+  async updateRole(req, res) {
+    try {
+      const Role = require('../models/Role');
+      const { id } = req.params;
+      const { displayName, description, permissions } = req.body;
+
+      const role = await Role.findById(id);
+
+      if (!role) {
+        return res.status(404).json({
+          success: false,
+          message: 'Role not found'
+        });
+      }
+
+      // Prevent editing system roles
+      if (role.isSystemRole) {
+        return res.status(403).json({
+          success: false,
+          message: 'Cannot modify system roles'
+        });
+      }
+
+      if (displayName) role.displayName = displayName;
+      if (description !== undefined) role.description = description;
+      if (permissions) role.permissions = permissions;
+
+      await role.save();
+
+      logger.info(`Admin updated role - Admin: ${req.user.id}, Role: ${role.name}`);
+
+      res.json({
+        success: true,
+        message: 'Role updated successfully',
+        data: role
+      });
+    } catch (error) {
+      logger.error('Update role error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating role',
+        error: error.message
+      });
+    }
+  }
+
+  async deleteRole(req, res) {
+    try {
+      const Role = require('../models/Role');
+      const { id } = req.params;
+
+      const role = await Role.findById(id);
+
+      if (!role) {
+        return res.status(404).json({
+          success: false,
+          message: 'Role not found'
+        });
+      }
+
+      // Prevent deleting system roles
+      if (role.isSystemRole) {
+        return res.status(403).json({
+          success: false,
+          message: 'Cannot delete system roles'
+        });
+      }
+
+      // Check if any users have this role
+      const userCount = await User.countDocuments({ assignedRole: id });
+
+      if (userCount > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot delete role. ${userCount} user(s) are assigned to this role`
+        });
+      }
+
+      await role.deleteOne();
+
+      logger.info(`Admin deleted role - Admin: ${req.user.id}, Role: ${role.name}`);
+
+      res.json({
+        success: true,
+        message: 'Role deleted successfully'
+      });
+    } catch (error) {
+      logger.error('Delete role error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting role',
+        error: error.message
+      });
+    }
+  }
+
+  async assignRoleToUser(req, res) {
+    try {
+      const Role = require('../models/Role');
+      const { userId } = req.params;
+      const { roleId } = req.body;
+
+      const user = await User.findById(userId);
+      const role = await Role.findById(roleId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      if (!role) {
+        return res.status(404).json({
+          success: false,
+          message: 'Role not found'
+        });
+      }
+
+      user.assignedRole = roleId;
+      await user.save();
+
+      logger.info(`Admin assigned role to user - Admin: ${req.user.id}, User: ${userId}, Role: ${role.name}`);
+
+      res.json({
+        success: true,
+        message: 'Role assigned successfully',
+        data: {
+          userId: user._id,
+          userName: `${user.firstName} ${user.lastName}`,
+          roleId: role._id,
+          roleName: role.displayName
+        }
+      });
+    } catch (error) {
+      logger.error('Assign role error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error assigning role',
+        error: error.message
+      });
+    }
+  }
+
+  async removeRoleFromUser(req, res) {
+    try {
+      const { userId } = req.params;
+
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      user.assignedRole = null;
+      await user.save();
+
+      logger.info(`Admin removed role from user - Admin: ${req.user.id}, User: ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'Role removed successfully'
+      });
+    } catch (error) {
+      logger.error('Remove role error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error removing role',
+        error: error.message
+      });
+    }
+  }
+
+  // ========== RBAC - GROUP MANAGEMENT METHODS ==========
+
+  async getGroups(req, res) {
+    try {
+      const Group = require('../models/Group');
+
+      const groups = await Group.find()
+        .populate('defaultRole', 'name displayName')
+        .select('-__v')
+        .sort('displayName')
+        .lean();
+
+      // Add member count to each group
+      const groupsWithCounts = groups.map(group => ({
+        ...group,
+        memberCount: group.members ? group.members.length : 0
+      }));
+
+      logger.info(`Admin fetched groups - Admin: ${req.user.id}`);
+
+      res.json({
+        success: true,
+        data: groupsWithCounts
+      });
+    } catch (error) {
+      logger.error('Get groups error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching groups',
+        error: error.message
+      });
+    }
+  }
+
+  async getGroupById(req, res) {
+    try {
+      const Group = require('../models/Group');
+      const { id } = req.params;
+
+      const group = await Group.findById(id)
+        .populate('defaultRole', 'name displayName permissions')
+        .populate('members', 'firstName lastName email position department assignedRole')
+        .lean();
+
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: 'Group not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: group
+      });
+    } catch (error) {
+      logger.error('Get group by ID error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching group',
+        error: error.message
+      });
+    }
+  }
+
+  async createGroup(req, res) {
+    try {
+      const Group = require('../models/Group');
+      const errors = validationResult(req);
+
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: errors.array()
+        });
+      }
+
+      const { name, displayName, description, permissions, defaultRole } = req.body;
+
+      // Check if group with this name already exists
+      const existingGroup = await Group.findOne({ name: name.toLowerCase().replace(/\s+/g, '_') });
+
+      if (existingGroup) {
+        return res.status(400).json({
+          success: false,
+          message: 'Group with this name already exists'
+        });
+      }
+
+      const group = await Group.create({
+        name: name.toLowerCase().replace(/\s+/g, '_'),
+        displayName,
+        description,
+        permissions,
+        defaultRole: defaultRole || null,
+        createdBy: req.user.id
+      });
+
+      logger.info(`Admin created group - Admin: ${req.user.id}, Group: ${group.name}`);
+
+      res.status(201).json({
+        success: true,
+        message: 'Group created successfully',
+        data: group
+      });
+    } catch (error) {
+      logger.error('Create group error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating group',
+        error: error.message
+      });
+    }
+  }
+
+  async updateGroup(req, res) {
+    try {
+      const Group = require('../models/Group');
+      const { id } = req.params;
+      const { displayName, description, permissions, defaultRole } = req.body;
+
+      const group = await Group.findById(id);
+
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: 'Group not found'
+        });
+      }
+
+      if (displayName) group.displayName = displayName;
+      if (description !== undefined) group.description = description;
+      if (permissions) group.permissions = permissions;
+      if (defaultRole !== undefined) group.defaultRole = defaultRole;
+
+      await group.save();
+
+      logger.info(`Admin updated group - Admin: ${req.user.id}, Group: ${group.name}`);
+
+      res.json({
+        success: true,
+        message: 'Group updated successfully',
+        data: group
+      });
+    } catch (error) {
+      logger.error('Update group error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating group',
+        error: error.message
+      });
+    }
+  }
+
+  async deleteGroup(req, res) {
+    try {
+      const Group = require('../models/Group');
+      const { id } = req.params;
+
+      const group = await Group.findById(id);
+
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: 'Group not found'
+        });
+      }
+
+      // Remove group reference from all users
+      await User.updateMany(
+        { groups: id },
+        { $pull: { groups: id } }
+      );
+
+      await group.deleteOne();
+
+      logger.info(`Admin deleted group - Admin: ${req.user.id}, Group: ${group.name}`);
+
+      res.json({
+        success: true,
+        message: 'Group deleted successfully'
+      });
+    } catch (error) {
+      logger.error('Delete group error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting group',
+        error: error.message
+      });
+    }
+  }
+
+  async addUserToGroup(req, res) {
+    try {
+      const Group = require('../models/Group');
+      const { groupId } = req.params;
+      const { userId } = req.body;
+
+      const user = await User.findById(userId);
+      const group = await Group.findById(groupId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: 'Group not found'
+        });
+      }
+
+      // Add user to group
+      await user.addToGroup(groupId);
+
+      logger.info(`Admin added user to group - Admin: ${req.user.id}, User: ${userId}, Group: ${group.name}`);
+
+      res.json({
+        success: true,
+        message: 'User added to group successfully',
+        data: {
+          userId: user._id,
+          userName: `${user.firstName} ${user.lastName}`,
+          groupId: group._id,
+          groupName: group.displayName
+        }
+      });
+    } catch (error) {
+      logger.error('Add user to group error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error adding user to group',
+        error: error.message
+      });
+    }
+  }
+
+  async removeUserFromGroup(req, res) {
+    try {
+      const Group = require('../models/Group');
+      const { groupId, userId } = req.params;
+
+      const user = await User.findById(userId);
+      const group = await Group.findById(groupId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: 'Group not found'
+        });
+      }
+
+      // Remove user from group
+      await user.removeFromGroup(groupId);
+
+      logger.info(`Admin removed user from group - Admin: ${req.user.id}, User: ${userId}, Group: ${group.name}`);
+
+      res.json({
+        success: true,
+        message: 'User removed from group successfully'
+      });
+    } catch (error) {
+      logger.error('Remove user from group error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error removing user from group',
+        error: error.message
+      });
+    }
+  }
+
+  async getUsersWithRBAC(req, res) {
+    try {
+      const users = await User.find()
+        .populate('assignedRole', 'name displayName permissions')
+        .populate('groups', 'name displayName permissions')
+        .select('firstName lastName email position department role assignedRole groups status')
+        .sort('firstName')
+        .lean();
+
+      logger.info(`Admin fetched users with RBAC - Admin: ${req.user.id}`);
+
+      res.json({
+        success: true,
+        data: users.map(user => ({
+          ...user,
+          fullName: `${user.firstName} ${user.lastName}`,
+          groupCount: user.groups ? user.groups.length : 0
+        }))
+      });
+    } catch (error) {
+      logger.error('Get users with RBAC error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching users',
+        error: error.message
+      });
+    }
+  }
+
+  async getUserPermissions(req, res) {
+    try {
+      const { userId } = req.params;
+
+      const user = await User.findById(userId)
+        .populate('assignedRole', 'name displayName permissions')
+        .populate('groups', 'name displayName permissions');
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      const permissions = await user.getPermissions();
+
+      res.json({
+        success: true,
+        data: {
+          userId: user._id,
+          userName: `${user.firstName} ${user.lastName}`,
+          role: user.assignedRole,
+          groups: user.groups,
+          effectivePermissions: permissions
+        }
+      });
+    } catch (error) {
+      logger.error('Get user permissions error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching user permissions',
+        error: error.message
+      });
+    }
+  }
+
+  async initializeDefaultRoles(req, res) {
+    try {
+      const Role = require('../models/Role');
+
+      await Role.createDefaultRoles();
+
+      logger.info(`Admin initialized default roles - Admin: ${req.user.id}`);
+
+      res.json({
+        success: true,
+        message: 'Default roles initialized successfully'
+      });
+    } catch (error) {
+      logger.error('Initialize default roles error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error initializing default roles',
+        error: error.message
+      });
+    }
+  }
+
 }
 module.exports = new AdminController();
