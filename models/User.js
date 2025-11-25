@@ -44,6 +44,23 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin', 'super_admin'],
     default: 'user'
   },
+  // Enhanced RBAC system
+  assignedRole: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Role'
+  },
+  groups: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Group'
+  }],
+  position: {
+    type: String,
+    trim: true
+  },
+  department: {
+    type: String,
+    trim: true
+  },
   status: {
     type: String,
     enum: ['active', 'suspended', 'pending'],
@@ -341,6 +358,88 @@ userSchema.methods.addToFavorites = function(propertyId) {
 userSchema.methods.removeFromFavorites = function(propertyId) {
   this.favorites = this.favorites.filter(id => !id.equals(propertyId));
   return this.save();
+};
+
+// RBAC Methods
+userSchema.methods.getPermissions = async function() {
+  const Group = mongoose.model('Group');
+
+  // Get permissions from all groups user belongs to
+  const groupPermissions = await Group.getUserPermissions(this._id);
+
+  // Get permissions from assigned role if exists
+  let rolePermissions = [];
+  if (this.assignedRole) {
+    await this.populate('assignedRole');
+    if (this.assignedRole && this.assignedRole.permissions) {
+      rolePermissions = this.assignedRole.permissions;
+    }
+  }
+
+  // Combine permissions from role and groups
+  const permissionsMap = new Map();
+
+  [...rolePermissions, ...groupPermissions].forEach(permission => {
+    const key = permission.resource;
+    if (!permissionsMap.has(key)) {
+      permissionsMap.set(key, new Set());
+    }
+    permission.actions.forEach(action => {
+      permissionsMap.get(key).add(action);
+    });
+  });
+
+  // Convert to array format
+  const combinedPermissions = [];
+  permissionsMap.forEach((actions, resource) => {
+    combinedPermissions.push({
+      resource,
+      actions: Array.from(actions)
+    });
+  });
+
+  return combinedPermissions;
+};
+
+userSchema.methods.hasPermission = async function(resource, action) {
+  // Super admin has all permissions
+  if (this.role === 'super_admin') {
+    return true;
+  }
+
+  const permissions = await this.getPermissions();
+  const permission = permissions.find(p => p.resource === resource);
+  return permission && permission.actions.includes(action);
+};
+
+userSchema.methods.addToGroup = async function(groupId) {
+  const Group = mongoose.model('Group');
+
+  if (!this.groups.includes(groupId)) {
+    this.groups.push(groupId);
+    await this.save();
+
+    // Also add to group's members
+    const group = await Group.findById(groupId);
+    if (group) {
+      await group.addMember(this._id);
+    }
+  }
+  return this;
+};
+
+userSchema.methods.removeFromGroup = async function(groupId) {
+  const Group = mongoose.model('Group');
+
+  this.groups = this.groups.filter(id => id.toString() !== groupId.toString());
+  await this.save();
+
+  // Also remove from group's members
+  const group = await Group.findById(groupId);
+  if (group) {
+    await group.removeMember(this._id);
+  }
+  return this;
 };
 
 module.exports = mongoose.model('User', userSchema);
