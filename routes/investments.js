@@ -38,6 +38,9 @@ router.get('/my-investments', authenticate, async (req, res) => {
           status: inv.status,
           createdAt: inv.createdAt,
           investedAt: inv.createdAt,
+          // Investment type and management fees
+          investmentType: inv.investmentType || 'simple_annual',
+          managementFee: inv.managementFee || { feePercentage: 0, feeAmount: 0, netInvestment: inv.amount },
           // Real-time calculated returns (unrealized)
           currentValue: calculatedReturns.currentValue,
           returns: calculatedReturns.totalReturns,
@@ -49,6 +52,11 @@ router.get('/my-investments', authenticate, async (req, res) => {
           rentalYieldRate: inv.rentalYieldRate || 0,
           appreciationRate: inv.appreciationRate || 0,
           penaltyRate: inv.penaltyRate || 0,
+          // Bond-specific fields
+          bondMaturityDate: inv.bondMaturityDate,
+          lockInEndDate: inv.lockInEndDate,
+          isInLockInPeriod: inv.isInLockInPeriod || false,
+          hasMatured: inv.hasMatured || false,
           maturityDate: inv.maturityDate,
           maturityPeriodYears: inv.maturityPeriodYears || 5,
           property: inv.property
