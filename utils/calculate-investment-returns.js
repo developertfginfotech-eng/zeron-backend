@@ -8,6 +8,9 @@ function calculateInvestmentReturns(investment) {
   const investmentDate = new Date(investment.createdAt);
   const maturityDate = investment.maturityDate ? new Date(investment.maturityDate) : null;
 
+  // Get investment amounts first (needed for early returns)
+  const principalAmount = investment.managementFee?.netInvestment || investment.amount;
+
   // Calculate holding period in milliseconds
   const holdingPeriodMs = now - investmentDate;
 
@@ -35,8 +38,6 @@ function calculateInvestmentReturns(investment) {
   // Real time calculation (uncomment for production):
   // const holdingPeriodYears = holdingPeriodMs / (365 * 24 * 60 * 60 * 1000);
   // ==================== END TEST MODE ====================
-
-  const principalAmount = investment.amount;
   const rentalYieldRate = investment.rentalYieldRate || 0;
   const appreciationRate = investment.appreciationRate || 0;
   const penaltyRate = investment.penaltyRate || 0;
