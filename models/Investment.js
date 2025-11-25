@@ -176,22 +176,25 @@ investmentSchema.statics.getUserPortfolioSummary = function(userId) {
         // Calculate returns from the investment
         investmentReturns: {
           $ifNull: ['$returns.totalReturnsReceived', 0]
+        },
+        // Use net investment (after management fees) if available, otherwise use amount
+        netAmount: {
+          $ifNull: ['$managementFee.netInvestment', '$amount']
         }
       }
     },
     {
       $addFields: {
-        // Current value = original amount + returns
-        // This ensures we don't have rounding losses from share calculations
+        // Current value = net investment amount + returns
         currentValue: {
-          $add: ['$amount', '$investmentReturns']
+          $add: ['$netAmount', '$investmentReturns']
         }
       }
     },
     {
       $group: {
         _id: '$user',
-        totalInvestments: { $sum: '$amount' },
+        totalInvestments: { $sum: '$netAmount' },
         totalCurrentValue: { $sum: '$currentValue' },
         totalReturns: { $sum: '$investmentReturns' },
         propertyCount: { $sum: 1 }
