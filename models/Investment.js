@@ -28,6 +28,19 @@ const investmentSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  // Management fee tracking
+  managementFee: {
+    feePercentage: { type: Number, default: 0 }, // Percentage charged (e.g., 1.80 or 2.60)
+    feeAmount: { type: Number, default: 0 }, // Actual fee amount deducted
+    netInvestment: { type: Number, default: 0 } // Amount after fee deduction (amount - feeAmount)
+  },
+  // Investment type: simple annual or bond-based
+  investmentType: {
+    type: String,
+    required: true,
+    enum: ['simple_annual', 'bond'],
+    default: 'simple_annual'
+  },
   status: {
     type: String,
     required: true,
@@ -70,12 +83,30 @@ const investmentSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    rentalYieldReceived: {
+      type: Number,
+      default: 0
+    },
+    appreciationReceived: {
+      type: Number,
+      default: 0
+    },
     lastReturnDate: {
+      type: Date
+    },
+    lastRentalYieldDate: {
       type: Date
     }
   },
   // Investment Terms (snapshot at investment time)
-  maturityDate: {
+  investmentDate: {
+    type: Date,
+    default: Date.now
+  },
+  lockInEndDate: {
+    type: Date
+  },
+  bondMaturityDate: {
     type: Date
   },
   exitDate: {
@@ -90,11 +121,31 @@ const investmentSchema = new mongoose.Schema({
   penaltyRate: {
     type: Number
   },
+  // Graduated penalties for this investment (snapshot from property)
+  graduatedPenalties: [{
+    year: { type: Number },
+    penaltyPercentage: { type: Number }
+  }],
+  lockingPeriodYears: {
+    type: Number
+  },
+  bondMaturityYears: {
+    type: Number
+  },
   maturityPeriodYears: {
     type: Number
   },
   investmentDurationYears: {
     type: Number
+  },
+  // Current status tracking
+  isInLockInPeriod: {
+    type: Boolean,
+    default: true
+  },
+  hasMatured: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

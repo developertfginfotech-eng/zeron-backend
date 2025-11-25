@@ -3,6 +3,7 @@ const Investment = require('../models/Investment');
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
 const mongoose = require('mongoose');
+const { calculateWithdrawalAmount, calculateInvestmentReturns } = require('../utils/investment-calculations');
 
 class PropertyController {
   
@@ -231,7 +232,7 @@ async investInProperty(req, res) {
 
     await session.withTransaction(async () => {
       const { id } = req.params;
-      const { units, shares, paymentMethod = 'mada' } = req.body;
+      const { units, shares, paymentMethod = 'mada', investmentType = 'simple_annual' } = req.body;
       const userId = req.user.id;
 
       const property = await Property.findById(id).session(session);
@@ -254,6 +255,17 @@ async investInProperty(req, res) {
       // Calculate total amount based on units
       const totalAmount = requestedUnits * property.financials.pricePerShare;
 
+      // Calculate management fee if applicable
+      let managementFeeAmount = 0;
+      let managementFeePercentage = 0;
+      let netInvestmentAmount = totalAmount;
+
+      if (property.managementFees && property.managementFees.isActive && property.managementFees.percentage > 0) {
+        managementFeePercentage = property.managementFees.percentage;
+        managementFeeAmount = (totalAmount * managementFeePercentage) / 100;
+        netInvestmentAmount = totalAmount - managementFeeAmount;
+      }
+
       // Check if user can afford the minimum investment
       const minUnitsRequired = Math.ceil(property.financials.minInvestment / property.financials.pricePerShare);
       if (requestedUnits < minUnitsRequired) {
@@ -272,6 +284,39 @@ async investInProperty(req, res) {
         throw new Error('KYC verification required');
       }
 
+      // Calculate investment dates based on investment type
+      const investmentDate = new Date();
+      let lockInEndDate = null;
+      let bondMaturityDate = null;
+      let lockingPeriodYears = null;
+      let bondMaturityYears = null;
+      let isInLockInPeriod = false;
+      let graduatedPenalties = [];
+
+      // For bond investments, set up lock-in and maturity dates
+      if (investmentType === 'bond') {
+        lockingPeriodYears = property.investmentTerms?.lockingPeriodYears || 3; // Default 3 years
+        bondMaturityYears = property.investmentTerms?.bondMaturityYears || lockingPeriodYears + 2; // Default: lock-in + 2 years
+
+        lockInEndDate = new Date(investmentDate);
+        lockInEndDate.setFullYear(lockInEndDate.getFullYear() + lockingPeriodYears);
+
+        bondMaturityDate = new Date(investmentDate);
+        bondMaturityDate.setFullYear(bondMaturityDate.getFullYear() + bondMaturityYears);
+
+        isInLockInPeriod = true;
+
+        graduatedPenalties = property.investmentTerms?.graduatedPenalties || [
+          { year: 1, penaltyPercentage: 30 },
+          { year: 2, penaltyPercentage: 20 },
+          { year: 3, penaltyPercentage: 10 }
+        ];
+      } else {
+        // Simple annual investment: 1 year duration, no lock-in
+        bondMaturityDate = new Date(investmentDate);
+        bondMaturityDate.setFullYear(bondMaturityDate.getFullYear() + 1);
+      }
+
       // Create investment - user is buying units directly from the property
       const investment = new Investment({
         user: userId,
@@ -279,6 +324,23 @@ async investInProperty(req, res) {
         shares: requestedUnits,
         amount: totalAmount,
         pricePerShare: property.financials.pricePerShare,
+        investmentType,
+        managementFee: {
+          feePercentage: managementFeePercentage,
+          feeAmount: managementFeeAmount,
+          netInvestment: netInvestmentAmount
+        },
+        // Investment terms snapshot (captured at investment time)
+        investmentDate,
+        lockInEndDate,
+        bondMaturityDate,
+        rentalYieldRate: property.investmentTerms?.rentalYieldRate || 8, // Default 8%
+        appreciationRate: property.investmentTerms?.appreciationRate || 3, // Default 3%
+        lockingPeriodYears,
+        bondMaturityYears,
+        graduatedPenalties,
+        isInLockInPeriod,
+        hasMatured: false,
         paymentDetails: {
           paymentMethod: 'fake',
           isFakePayment: true
@@ -286,12 +348,12 @@ async investInProperty(req, res) {
         status: 'confirmed'
       });
 
-      // Update user's wallet
+      // Update user's wallet (using net investment amount after fees)
       user.wallet.totalUnitsOwned = (user.wallet.totalUnitsOwned || 0) + requestedUnits;
-      user.wallet.totalInvested = (user.wallet.totalInvested || 0) + totalAmount;
+      user.wallet.totalInvested = (user.wallet.totalInvested || 0) + netInvestmentAmount;
 
-      // Update investment summary
-      user.investmentSummary.totalInvested = (user.investmentSummary.totalInvested || 0) + totalAmount;
+      // Update investment summary (using net investment amount after fees)
+      user.investmentSummary.totalInvested = (user.investmentSummary.totalInvested || 0) + netInvestmentAmount;
       user.investmentSummary.lastInvestmentDate = new Date();
 
       // Save investment first
@@ -320,6 +382,11 @@ async investInProperty(req, res) {
         property.investorCount += 1;
       }
 
+      // Track total management fees collected
+      if (managementFeeAmount > 0) {
+        property.managementFees.totalFeesCollected = (property.managementFees.totalFeesCollected || 0) + managementFeeAmount;
+      }
+
       await Promise.all([
         property.save({ session }),
         user.save({ session })
@@ -330,8 +397,22 @@ async investInProperty(req, res) {
         message: `Successfully purchased ${requestedUnits} units`,
         data: {
           investmentId: investment._id,
+          investmentType,
           unitsPurchased: requestedUnits,
           totalAmountPaid: totalAmount,
+          managementFee: {
+            percentage: managementFeePercentage,
+            amount: managementFeeAmount,
+            netInvestment: netInvestmentAmount
+          },
+          investmentDetails: {
+            investmentDate,
+            lockInEndDate,
+            bondMaturityDate,
+            rentalYieldRate: investment.rentalYieldRate,
+            appreciationRate: investment.appreciationRate,
+            graduatedPenalties: investmentType === 'bond' ? graduatedPenalties : null
+          },
           pricePerUnit: property.financials.pricePerShare,
           propertyRemainingUnits: property.financials.availableShares,
           userSummary: {
@@ -351,5 +432,104 @@ async investInProperty(req, res) {
     await session.endSession();
   }
 }
+
+  /**
+   * Calculate investment returns and withdrawal amount
+   * Shows current value, returns, and penalties if applicable
+   */
+  async calculateWithdrawal(req, res) {
+    try {
+      const { investmentId } = req.params;
+      const userId = req.user.id;
+
+      // Find the investment
+      const investment = await Investment.findById(investmentId)
+        .populate('property')
+        .lean();
+
+      if (!investment) {
+        return res.status(404).json({
+          success: false,
+          message: 'Investment not found'
+        });
+      }
+
+      // Verify ownership
+      if (investment.user.toString() !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to view this investment'
+        });
+      }
+
+      const property = investment.property;
+      const withdrawalDetails = calculateWithdrawalAmount(investment, property);
+
+      res.json({
+        success: true,
+        data: {
+          investmentId: investment._id,
+          investmentType: investment.investmentType,
+          investmentAmount: investment.amount,
+          netInvestmentAmount: investment.managementFee?.netInvestment || investment.amount,
+          ...withdrawalDetails,
+          canWithdrawWithoutPenalty: !withdrawalDetails.penalty.isInLockInPeriod
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error calculating withdrawal amount',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get investment returns summary
+   * Shows all returns without withdrawal penalty
+   */
+  async getInvestmentReturns(req, res) {
+    try {
+      const { investmentId } = req.params;
+      const userId = req.user.id;
+
+      const investment = await Investment.findById(investmentId)
+        .populate('property')
+        .lean();
+
+      if (!investment) {
+        return res.status(404).json({
+          success: false,
+          message: 'Investment not found'
+        });
+      }
+
+      if (investment.user.toString() !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to view this investment'
+        });
+      }
+
+      const property = investment.property;
+      const returns = calculateInvestmentReturns(investment, property);
+
+      res.json({
+        success: true,
+        data: {
+          investmentId: investment._id,
+          investmentType: investment.investmentType,
+          ...returns
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error calculating investment returns',
+        error: error.message
+      });
+    }
+  }
 }
 module.exports = new PropertyController();
