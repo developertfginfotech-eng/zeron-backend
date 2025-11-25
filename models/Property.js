@@ -75,8 +75,26 @@ const propertySchema = new mongoose.Schema({
     rentalYieldRate: { type: Number, default: null }, // Annual rental yield %, null = use global setting
     appreciationRate: { type: Number, default: null }, // Annual appreciation %, null = use global setting
     lockingPeriodYears: { type: Number, default: null }, // Locking period in years, null = use global setting
+    bondMaturityYears: { type: Number, default: null }, // Bond maturity period in years (must be >= lockingPeriodYears)
     investmentDurationYears: { type: Number, default: null }, // Investment duration, null = use global setting
-    earlyWithdrawalPenaltyPercentage: { type: Number, default: null } // Penalty %, null = use global setting
+    earlyWithdrawalPenaltyPercentage: { type: Number, default: null }, // Penalty %, null = use global setting (deprecated - use graduatedPenalties)
+    // Graduated penalty structure for early withdrawal during lock-in period
+    graduatedPenalties: [{
+      year: { type: Number, required: true }, // Year number (1, 2, 3, etc.)
+      penaltyPercentage: { type: Number, required: true, min: 0, max: 100 } // Penalty % for that year
+    }]
+  },
+
+  // Management fees configuration
+  managementFees: {
+    percentage: { type: Number, default: 0, min: 0, max: 100 }, // Management fee percentage (e.g., 1.80 or 2.60)
+    isActive: { type: Boolean, default: false }, // Whether management fees are enabled for this property
+    deductionType: {
+      type: String,
+      enum: ['upfront', 'annual', 'monthly'],
+      default: 'upfront'
+    }, // When to deduct the management fee
+    totalFeesCollected: { type: Number, default: 0 } // Total management fees collected from all investments
   },
 
   analytics: {
