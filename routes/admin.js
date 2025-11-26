@@ -234,10 +234,7 @@ router.get('/users/:userId/permissions', authorize('super_admin'), adminControll
 // Initialize default roles (one-time setup)
 router.post('/rbac/initialize', authorize('super_admin'), adminController.initializeDefaultRoles);
 
-// Get security settings
-router.get('/security-settings', adminController.getSecuritySettings);
-
-// Update security settings
+// Update security settings (super admin only)
 router.put('/security-settings', authorize('super_admin'), adminController.updateSecuritySettings);
 
 module.exports = router;
