@@ -183,38 +183,41 @@ router.delete('/users/:userId/remove-role', authorize('super_admin'), adminContr
 // ========== RBAC - GROUP MANAGEMENT ROUTES (Super Admin Only) ==========
 
 // Get all groups
-router.get('/groups', authorize('super_admin'), adminController.getGroups);
+router.get('/groups', authorize('admin', 'super_admin'), adminController.getGroups);
 
 // Get specific group by ID with members
-router.get('/groups/:id', authorize('super_admin'), adminController.getGroupById);
+router.get('/groups/:id', authorize('admin', 'super_admin'), adminController.getGroupById);
 
 // Create new group
-router.post('/groups', authorize('super_admin'), [
+router.post('/groups', authorize('admin', 'super_admin'), [
   body('name').trim().isLength({ min: 2 }).withMessage('Group name must be at least 2 characters'),
   body('displayName').trim().isLength({ min: 2 }).withMessage('Display name must be at least 2 characters'),
   body('description').optional().trim(),
+  body('department').optional().trim(),
   body('permissions').isArray().withMessage('Permissions must be an array'),
   body('defaultRole').optional().isMongoId().withMessage('Valid role ID required')
 ], adminController.createGroup);
 
 // Update group
-router.put('/groups/:id', authorize('super_admin'), [
+router.put('/groups/:id', authorize('admin', 'super_admin'), [
   body('displayName').optional().trim().isLength({ min: 2 }),
   body('description').optional().trim(),
+  body('department').optional().trim(),
   body('permissions').optional().isArray(),
   body('defaultRole').optional().isMongoId()
 ], adminController.updateGroup);
 
 // Delete group
-router.delete('/groups/:id', authorize('super_admin'), adminController.deleteGroup);
+router.delete('/groups/:id', authorize('admin', 'super_admin'), adminController.deleteGroup);
 
 // Add user to group
-router.post('/groups/:groupId/add-member', authorize('super_admin'), [
-  body('userId').isMongoId().withMessage('Valid user ID required')
+router.post('/groups/:groupId/add-member', authorize('admin', 'super_admin'), [
+  body('userId').isMongoId().withMessage('Valid user ID required'),
+  body('memberPermissions').optional().isArray().withMessage('Member permissions must be an array')
 ], adminController.addUserToGroup);
 
 // Remove user from group
-router.delete('/groups/:groupId/remove-member/:userId', authorize('super_admin'), adminController.removeUserFromGroup);
+router.delete('/groups/:groupId/remove-member/:userId', authorize('admin', 'super_admin'), adminController.removeUserFromGroup);
 
 // Get all users with their roles and groups
 router.get('/rbac/users', authorize('super_admin'), adminController.getUsersWithRBAC);
