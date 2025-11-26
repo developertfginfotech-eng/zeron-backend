@@ -91,7 +91,7 @@ router.post('/',
   ],
   async (req, res) => {
     try {
-      const { propertyId, shares: requestedShares, amount: requestedAmount } = req.body;
+      const { propertyId, shares: requestedShares, amount: requestedAmount, investmentType: requestedInvestmentType } = req.body;
       const userId = req.user.id;
 
       // Validate that either shares or amount is provided
@@ -206,8 +206,12 @@ router.post('/',
       // NOTE: Returns calculation uses accelerated time (1 hour = 1 year) for testing
       const maturityDateMs = Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000; // years
 
-      // Determine investment type based on property having bond maturity
-      const isBondInvestment = property.investmentTerms?.bondMaturityYears ? true : false;
+      // Determine investment type: use requested type if provided, otherwise check property config
+      const isBondInvestment = requestedInvestmentType === 'bond'
+        ? true
+        : requestedInvestmentType === 'simple_annual'
+          ? false
+          : (property.investmentTerms?.bondMaturityYears ? true : false);
 
       // Create investment
       const investment = new Investment({
