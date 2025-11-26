@@ -25,6 +25,9 @@ router.get('/properties', adminController.getProperties);
 // Get specific property (public)
 router.get('/properties/:id', adminController.getPropertyById);
 
+// Get security settings (public - read-only)
+router.get('/security-settings', adminController.getSecuritySettings);
+
 // Apply authentication to all remaining admin routes
 router.use(authenticate);
 
