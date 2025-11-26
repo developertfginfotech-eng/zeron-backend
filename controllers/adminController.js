@@ -3,6 +3,8 @@ const Property = require("../models/Property");
 const Investment = require("../models/Investment");
 const KYC = require("../models/KYC");
 const SimpleOTP = require("../models/SimpleOTP");
+const Role = require("../models/Role");
+const Group = require("../models/Group");
 const { validationResult } = require("express-validator");
 const mongoose = require("mongoose");
 const logger = require("../utils/logger");
@@ -2212,7 +2214,6 @@ try {
   async createAdminUser(req, res) {
     try {
       const { firstName, lastName, email, phone, position, role, password, groupIds } = req.body;
-      const Group = require('../models/Group');
       const Role = require('../models/Role');
 
       if (req.user.role !== "super_admin") {
@@ -3252,8 +3253,6 @@ try {
 
   async getGroups(req, res) {
     try {
-      const Group = require('../models/Group');
-
       const groups = await Group.find()
         .populate('defaultRole', 'name displayName')
         .populate({
@@ -3288,7 +3287,6 @@ try {
 
   async getGroupById(req, res) {
     try {
-      const Group = require('../models/Group');
       const { id } = req.params;
 
       const group = await Group.findById(id)
@@ -3322,7 +3320,6 @@ try {
 
   async createGroup(req, res) {
     try {
-      const Group = require('../models/Group');
       const errors = validationResult(req);
 
       if (!errors.isEmpty()) {
@@ -3374,7 +3371,6 @@ try {
 
   async updateGroup(req, res) {
     try {
-      const Group = require('../models/Group');
       const { id } = req.params;
       const { displayName, description, permissions, defaultRole } = req.body;
 
@@ -3413,7 +3409,6 @@ try {
 
   async deleteGroup(req, res) {
     try {
-      const Group = require('../models/Group');
       const { id } = req.params;
 
       const group = await Group.findById(id);
@@ -3451,7 +3446,6 @@ try {
 
   async addUserToGroup(req, res) {
     try {
-      const Group = require('../models/Group');
       const { groupId } = req.params;
       const { userId, memberPermissions } = req.body;
 
@@ -3510,7 +3504,6 @@ try {
 
   async removeUserFromGroup(req, res) {
     try {
-      const Group = require('../models/Group');
       const { groupId, userId } = req.params;
 
       const user = await User.findById(userId);
@@ -3544,6 +3537,65 @@ try {
       res.status(500).json({
         success: false,
         message: 'Error removing user from group',
+        error: error.message
+      });
+    }
+  }
+
+  async updateMemberPermissions(req, res) {
+    try {
+      const { groupId, userId } = req.params;
+      const { memberPermissions } = req.body;
+
+      const user = await User.findById(userId);
+      const group = await Group.findById(groupId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: 'Group not found'
+        });
+      }
+
+      // Find the member in the group
+      const memberIndex = group.members.findIndex(m => m.userId.toString() === userId.toString());
+
+      if (memberIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: 'User is not a member of this group'
+        });
+      }
+
+      // Update the member's permissions
+      group.members[memberIndex].memberPermissions = memberPermissions || [];
+      await group.save();
+
+      logger.info(`Admin updated member permissions - Admin: ${req.user.id}, User: ${userId}, Group: ${group.name}`);
+
+      res.json({
+        success: true,
+        message: 'Member permissions updated successfully',
+        data: {
+          userId: user._id,
+          userName: `${user.firstName} ${user.lastName}`,
+          groupId: group._id,
+          groupName: group.displayName,
+          memberPermissions: memberPermissions || []
+        }
+      });
+    } catch (error) {
+      logger.error('Update member permissions error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error updating member permissions',
         error: error.message
       });
     }

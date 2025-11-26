@@ -225,6 +225,11 @@ router.post('/groups/:groupId/add-member', authorize('admin', 'super_admin', 'ky
 // Remove user from group
 router.delete('/groups/:groupId/remove-member/:userId', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), adminController.removeUserFromGroup);
 
+// Update member permissions within a group
+router.put('/groups/:groupId/members/:userId/permissions', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), [
+  body('memberPermissions').optional().isArray().withMessage('Member permissions must be an array')
+], adminController.updateMemberPermissions);
+
 // Get all users with their roles and groups
 router.get('/rbac/users', authorize('super_admin'), adminController.getUsersWithRBAC);
 
