@@ -208,14 +208,20 @@ router.post('/',
       const appreciation = propertySettings.appreciationRate !== null ? propertySettings.appreciationRate : settings.appreciationRatePercentage;
       const penalty = propertySettings.earlyWithdrawalPenaltyPercentage !== null ? propertySettings.earlyWithdrawalPenaltyPercentage : settings.earlyWithdrawalPenaltyPercentage;
 
-      // For annual plans, use 1 year; for bonds, use the configured maturity period
+      // For annual plans, use 1 year; for bonds, use the admin-configured bond maturity period
       const maturityPeriod = isBondInvestment
-        ? (propertySettings.lockingPeriodYears !== null ? propertySettings.lockingPeriodYears : settings.maturityPeriodYears)
+        ? (propertySettings.bondMaturityYears !== null ? propertySettings.bondMaturityYears : settings.maturityPeriodYears)
         : 1; // Annual plans are 1 year
+
+      // Lock-in period: for bonds use lockingPeriodYears, for annual plans always 1 year
+      const lockInPeriod = isBondInvestment
+        ? (propertySettings.lockingPeriodYears !== null ? propertySettings.lockingPeriodYears : 1)
+        : 1; // Annual plans always 1 year
 
       // Maturity date in real years (display purposes)
       // NOTE: Returns calculation uses accelerated time (1 hour = 1 year) for testing
       const maturityDateMs = Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000; // years
+      const lockInEndDateMs = Date.now() + lockInPeriod * 365 * 24 * 60 * 60 * 1000; // years
 
       // Create investment
       const investment = new Investment({
@@ -237,11 +243,11 @@ router.post('/',
         maturityDate: new Date(maturityDateMs),
         // For bond investments, set bondMaturityDate and lockInEndDate
         bondMaturityDate: isBondInvestment ? new Date(maturityDateMs) : undefined,
-        lockInEndDate: new Date(maturityDateMs),
+        lockInEndDate: new Date(lockInEndDateMs),
         maturityPeriodYears: maturityPeriod,
         investmentDurationYears: maturityPeriod,
         bondMaturityYears: isBondInvestment ? propertySettings.bondMaturityYears : undefined,
-        lockingPeriodYears: maturityPeriod,
+        lockingPeriodYears: lockInPeriod,
         // Set initial lock-in status (in lock-in period initially)
         isInLockInPeriod: true,
         hasMatured: false
