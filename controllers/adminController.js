@@ -3222,7 +3222,10 @@ try {
 
       const group = await Group.findById(id)
         .populate('defaultRole', 'name displayName permissions')
-        .populate('members', 'firstName lastName email position department assignedRole')
+        .populate({
+          path: 'members.userId',
+          select: 'firstName lastName email'
+        })
         .lean();
 
       if (!group) {

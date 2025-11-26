@@ -183,13 +183,13 @@ router.delete('/users/:userId/remove-role', authorize('super_admin'), adminContr
 // ========== RBAC - GROUP MANAGEMENT ROUTES (Super Admin Only) ==========
 
 // Get all groups
-router.get('/groups', authorize('admin', 'super_admin'), adminController.getGroups);
+router.get('/groups', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), adminController.getGroups);
 
 // Get specific group by ID with members
-router.get('/groups/:id', authorize('admin', 'super_admin'), adminController.getGroupById);
+router.get('/groups/:id', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), adminController.getGroupById);
 
 // Create new group
-router.post('/groups', authorize('admin', 'super_admin'), [
+router.post('/groups', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), [
   body('name').trim().isLength({ min: 2 }).withMessage('Group name must be at least 2 characters'),
   body('displayName').trim().isLength({ min: 2 }).withMessage('Display name must be at least 2 characters'),
   body('description').optional().trim(),
@@ -199,7 +199,7 @@ router.post('/groups', authorize('admin', 'super_admin'), [
 ], adminController.createGroup);
 
 // Update group
-router.put('/groups/:id', authorize('admin', 'super_admin'), [
+router.put('/groups/:id', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), [
   body('displayName').optional().trim().isLength({ min: 2 }),
   body('description').optional().trim(),
   body('department').optional().trim(),
@@ -208,16 +208,16 @@ router.put('/groups/:id', authorize('admin', 'super_admin'), [
 ], adminController.updateGroup);
 
 // Delete group
-router.delete('/groups/:id', authorize('admin', 'super_admin'), adminController.deleteGroup);
+router.delete('/groups/:id', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), adminController.deleteGroup);
 
 // Add user to group
-router.post('/groups/:groupId/add-member', authorize('admin', 'super_admin'), [
+router.post('/groups/:groupId/add-member', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), [
   body('userId').isMongoId().withMessage('Valid user ID required'),
   body('memberPermissions').optional().isArray().withMessage('Member permissions must be an array')
 ], adminController.addUserToGroup);
 
 // Remove user from group
-router.delete('/groups/:groupId/remove-member/:userId', authorize('admin', 'super_admin'), adminController.removeUserFromGroup);
+router.delete('/groups/:groupId/remove-member/:userId', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), adminController.removeUserFromGroup);
 
 // Get all users with their roles and groups
 router.get('/rbac/users', authorize('super_admin'), adminController.getUsersWithRBAC);
