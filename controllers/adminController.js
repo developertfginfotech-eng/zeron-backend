@@ -2211,7 +2211,8 @@ try {
 
   async createAdminUser(req, res) {
     try {
-      const { firstName, lastName, email, role, password } = req.body;
+      const { firstName, lastName, email, phone, position, role, password, groupIds } = req.body;
+      const Group = require('../models/Group');
 
       if (req.user.role !== "super_admin") {
         return res.status(403).json({
@@ -2220,39 +2221,95 @@ try {
         });
       }
 
+      // Validate required fields
+      if (!firstName || !lastName || !email || !password || !role) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields: firstName, lastName, email, password, role",
+        });
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid email format",
+        });
+      }
+
+      // Validate password strength
+      if (password.length < 8) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 8 characters",
+        });
+      }
+
       const existingUser = await User.findOne({ email: email.toLowerCase() });
       if (existingUser) {
         return res.status(400).json({
           success: false,
-          message: "User already exists",
+          message: "User with this email already exists",
         });
       }
 
       const newAdmin = new User({
-        firstName,
-        lastName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         email: email.toLowerCase(),
+        phone: phone || null,
+        position: position || null,
         password,
-        role,
+        role: "admin",
+        assignedRole: role, // Store the specific role (kyc_officer, property_manager, etc.)
         status: "active",
         kycStatus: "approved",
         emailVerified: true,
       });
 
-      await newAdmin.save();
+      const savedAdmin = await newAdmin.save();
+
+      // Add to groups if specified
+      if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
+        for (const groupId of groupIds) {
+          try {
+            const group = await Group.findById(groupId);
+            if (group) {
+              await group.addMember(savedAdmin._id, [], req.user.id);
+            }
+          } catch (groupErr) {
+            console.warn(`Failed to add admin to group ${groupId}:`, groupErr.message);
+          }
+        }
+      }
+
+      logger.info(`Admin created new administrator - Admin: ${req.user.id}, New Admin: ${savedAdmin._id}, Role: ${role}`);
 
       res.status(201).json({
         success: true,
         message: "Administrator created successfully",
+        data: {
+          id: savedAdmin._id,
+          firstName: savedAdmin.firstName,
+          lastName: savedAdmin.lastName,
+          email: savedAdmin.email,
+          phone: savedAdmin.phone,
+          position: savedAdmin.position,
+          role: role,
+          status: savedAdmin.status,
+        },
       });
     } catch (error) {
+      logger.error('Create admin user error:', error);
       res.status(500).json({
         success: false,
         message: "Error creating administrator",
+        error: error.message,
       });
     }
   }
-   
+
 
   async getActiveInvestors(req, res) {
     try {
