@@ -184,13 +184,20 @@ router.post('/',
         });
       }
 
+      // Determine investment type: use requested type if provided, otherwise check property config
+      const isBondInvestment = requestedInvestmentType === 'bond'
+        ? true
+        : requestedInvestmentType === 'simple_annual'
+          ? false
+          : (property.investmentTerms?.bondMaturityYears ? true : false);
+
       // Get investment settings - use property-specific if set, otherwise use global
       const globalSettings = await InvestmentSettings.getActiveSettings();
       const defaultSettings = {
         rentalYieldPercentage: 8, // Default 8% annual
         appreciationRatePercentage: 3, // Default 3% annual
         earlyWithdrawalPenaltyPercentage: 5, // Default 5% penalty
-        maturityPeriodYears: 5 // Default 5 years
+        maturityPeriodYears: 5 // Default 5 years for bonds
       };
 
       const settings = globalSettings || defaultSettings;
@@ -200,18 +207,15 @@ router.post('/',
       const rentalYield = propertySettings.rentalYieldRate !== null ? propertySettings.rentalYieldRate : settings.rentalYieldPercentage;
       const appreciation = propertySettings.appreciationRate !== null ? propertySettings.appreciationRate : settings.appreciationRatePercentage;
       const penalty = propertySettings.earlyWithdrawalPenaltyPercentage !== null ? propertySettings.earlyWithdrawalPenaltyPercentage : settings.earlyWithdrawalPenaltyPercentage;
-      const maturityPeriod = propertySettings.lockingPeriodYears !== null ? propertySettings.lockingPeriodYears : settings.maturityPeriodYears;
+
+      // For annual plans, use 1 year; for bonds, use the configured maturity period
+      const maturityPeriod = isBondInvestment
+        ? (propertySettings.lockingPeriodYears !== null ? propertySettings.lockingPeriodYears : settings.maturityPeriodYears)
+        : 1; // Annual plans are 1 year
 
       // Maturity date in real years (display purposes)
       // NOTE: Returns calculation uses accelerated time (1 hour = 1 year) for testing
       const maturityDateMs = Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000; // years
-
-      // Determine investment type: use requested type if provided, otherwise check property config
-      const isBondInvestment = requestedInvestmentType === 'bond'
-        ? true
-        : requestedInvestmentType === 'simple_annual'
-          ? false
-          : (property.investmentTerms?.bondMaturityYears ? true : false);
 
       // Create investment
       const investment = new Investment({
