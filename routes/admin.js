@@ -234,4 +234,7 @@ router.post('/rbac/initialize', authorize('super_admin'), adminController.initia
 // Get security settings
 router.get('/security-settings', adminController.getSecuritySettings);
 
+// Update security settings
+router.put('/security-settings', authorize('super_admin'), adminController.updateSecuritySettings);
+
 module.exports = router;
