@@ -206,6 +206,9 @@ router.post('/',
       // NOTE: Returns calculation uses accelerated time (1 hour = 1 year) for testing
       const maturityDateMs = Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000; // years
 
+      // Determine investment type based on property having bond maturity
+      const isBondInvestment = property.investmentTerms?.bondMaturityYears ? true : false;
+
       // Create investment
       const investment = new Investment({
         user: userId,
@@ -218,12 +221,22 @@ router.post('/',
           paymentMethod: 'fake',
           isFakePayment: true
         },
+        // Set investment type: bond or simple_annual
+        investmentType: isBondInvestment ? 'bond' : 'simple_annual',
         rentalYieldRate: rentalYield,
         appreciationRate: appreciation,
         penaltyRate: penalty,
         maturityDate: new Date(maturityDateMs),
+        // For bond investments, set bondMaturityDate and lockInEndDate
+        bondMaturityDate: isBondInvestment ? new Date(maturityDateMs) : undefined,
+        lockInEndDate: new Date(maturityDateMs),
         maturityPeriodYears: maturityPeriod,
-        investmentDurationYears: maturityPeriod
+        investmentDurationYears: maturityPeriod,
+        bondMaturityYears: isBondInvestment ? propertySettings.bondMaturityYears : undefined,
+        lockingPeriodYears: maturityPeriod,
+        // Set initial lock-in status (in lock-in period initially)
+        isInLockInPeriod: true,
+        hasMatured: false
       });
 
       await investment.save();
