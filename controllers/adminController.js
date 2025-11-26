@@ -3259,7 +3259,7 @@ try {
         });
       }
 
-      const { name, displayName, description, permissions, defaultRole } = req.body;
+      const { name, displayName, description, department, permissions, defaultRole } = req.body;
 
       // Check if group with this name already exists
       const existingGroup = await Group.findOne({ name: name.toLowerCase().replace(/\s+/g, '_') });
@@ -3275,6 +3275,7 @@ try {
         name: name.toLowerCase().replace(/\s+/g, '_'),
         displayName,
         description,
+        department: department || 'other',
         permissions,
         defaultRole: defaultRole || null,
         createdBy: req.user.id
@@ -3378,7 +3379,7 @@ try {
     try {
       const Group = require('../models/Group');
       const { groupId } = req.params;
-      const { userId } = req.body;
+      const { userId, memberPermissions } = req.body;
 
       const user = await User.findById(userId);
       const group = await Group.findById(groupId);
@@ -3397,8 +3398,18 @@ try {
         });
       }
 
-      // Add user to group
-      await user.addToGroup(groupId);
+      // Check if user is already in group
+      const isMemberAlready = group.members.some(m => m.userId.toString() === userId.toString());
+
+      if (isMemberAlready) {
+        return res.status(400).json({
+          success: false,
+          message: 'User is already a member of this group'
+        });
+      }
+
+      // Add user to group with member-specific permissions
+      await group.addMember(userId, memberPermissions || [], req.user.id);
 
       logger.info(`Admin added user to group - Admin: ${req.user.id}, User: ${userId}, Group: ${group.name}`);
 
@@ -3409,7 +3420,8 @@ try {
           userId: user._id,
           userName: `${user.firstName} ${user.lastName}`,
           groupId: group._id,
-          groupName: group.displayName
+          groupName: group.displayName,
+          memberPermissions: memberPermissions || []
         }
       });
     } catch (error) {
