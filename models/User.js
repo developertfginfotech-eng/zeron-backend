@@ -11,8 +11,7 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required: [true, 'Phone is required'],
-    unique: true,
+    sparse: true,
     match: [/^(\+966|966|0)?[5-9]\d{8}$/, 'Invalid Saudi phone number']
   },
   password: {
