@@ -3189,6 +3189,10 @@ try {
 
       const groups = await Group.find()
         .populate('defaultRole', 'name displayName')
+        .populate({
+          path: 'members.userId',
+          select: 'firstName lastName email'
+        })
         .select('-__v')
         .sort('displayName')
         .lean();
