@@ -139,11 +139,14 @@ router.get('/reports/earnings', authorize('super_admin', 'financial_analyst'), [
 
 
 router.post('/admin-users', authorize('super_admin'), [
-  body('firstName').trim().isLength({ min: 2 }),
-  body('lastName').trim().isLength({ min: 2 }),
-  body('email').isEmail(),
-  body('role').isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer']),
-  body('password').optional().isLength({ min: 8 })
+  body('firstName').trim().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
+  body('lastName').trim().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
+  body('email').isEmail().withMessage('Valid email required'),
+  body('phone').optional().trim(),
+  body('position').optional().trim(),
+  body('role').isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer']).withMessage('Invalid role'),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('groupIds').optional().isArray().withMessage('Group IDs must be an array')
 ], adminController.createAdminUser);
 
 // ========== RBAC - ROLE MANAGEMENT ROUTES (Super Admin Only) ==========
