@@ -2213,6 +2213,7 @@ try {
     try {
       const { firstName, lastName, email, phone, position, role, password, groupIds } = req.body;
       const Group = require('../models/Group');
+      const Role = require('../models/Role');
 
       if (req.user.role !== "super_admin") {
         return res.status(403).json({
@@ -2254,15 +2255,24 @@ try {
         });
       }
 
+      // Find the role by name to get its ObjectId
+      const roleDoc = await Role.findOne({ name: role });
+      if (!roleDoc) {
+        return res.status(400).json({
+          success: false,
+          message: `Role "${role}" not found`,
+        });
+      }
+
       const newAdmin = new User({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.toLowerCase(),
-        phone: phone || null,
-        position: position || null,
+        phone: phone || undefined,
+        position: position || undefined,
         password,
         role: "admin",
-        assignedRole: role, // Store the specific role (kyc_officer, property_manager, etc.)
+        assignedRole: roleDoc._id, // Store the role ObjectId
         status: "active",
         kycStatus: "approved",
         emailVerified: true,
