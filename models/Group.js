@@ -16,27 +16,102 @@ const groupSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Department category for organizing groups
+  department: {
+    type: String,
+    enum: [
+      'kyc',
+      'finance',
+      'compliance',
+      'operations',
+      'property-management',
+      'user-management',
+      'analytics',
+      'admin',
+      'other'
+    ],
+    default: 'other'
+  },
   // Permissions defined at group level
   permissions: [{
     resource: {
       type: String,
       required: true,
       enum: [
+        // KYC Department
         'kyc',
+        'kyc:verification',
+        'kyc:approval',
+        'kyc:documents',
+
+        // Finance Department
+        'finance',
+        'finance:reports',
+        'finance:investments',
+        'finance:payouts',
+        'finance:audits',
+
+        // Compliance Department
+        'compliance',
+        'compliance:monitoring',
+        'compliance:reports',
+        'compliance:approvals',
+        'compliance:policies',
+
+        // Operations Department
+        'operations',
+        'operations:properties',
+        'operations:transactions',
+        'operations:support',
+        'operations:maintenance',
+
+        // Property Management
         'properties',
-        'investments',
+        'properties:create',
+        'properties:edit',
+        'properties:manage',
+        'properties:documents',
+
+        // User Management
         'users',
+        'users:create',
+        'users:edit',
+        'users:deactivate',
+        'users:reports',
+
+        // Investments & Transactions
+        'investments',
         'transactions',
+        'transactions:manage',
+        'transactions:approve',
+        'transactions:dispute',
+
+        // Documents & Records
         'documents',
+        'documents:upload',
+        'documents:verify',
+        'documents:archive',
+
+        // Analytics & Reporting
         'analytics',
+        'analytics:view',
+        'analytics:export',
+        'analytics:generate',
+
+        // System
         'notifications',
         'settings',
-        'admin'
+        'admin',
+        'admin:users',
+        'admin:roles',
+        'admin:groups',
+        'admin:security',
+        'admin:logs'
       ]
     },
     actions: [{
       type: String,
-      enum: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'manage', 'export']
+      enum: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'manage', 'export', 'verify', 'archive']
     }]
   }],
   // Members of this group
