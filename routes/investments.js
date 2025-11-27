@@ -25,42 +25,44 @@ router.get('/my-investments', authenticate, async (req, res) => {
 
     res.json({
       success: true,
-      data: investments.map(inv => {
-        // Calculate real-time returns for this investment
-        const calculatedReturns = calculateInvestmentReturns(inv);
+      data: investments
+        .filter(inv => inv.property) // Filter out investments with null property references
+        .map(inv => {
+          // Calculate real-time returns for this investment
+          const calculatedReturns = calculateInvestmentReturns(inv);
 
-        return {
-          _id: inv._id,
-          propertyId: inv.property._id,
-          propertyName: inv.property.title,
-          amount: inv.amount,
-          shares: inv.shares,
-          status: inv.status,
-          createdAt: inv.createdAt,
-          investedAt: inv.createdAt,
-          // Investment type and management fees
-          investmentType: inv.investmentType || 'simple_annual',
-          managementFee: inv.managementFee || { feePercentage: 0, feeAmount: 0, netInvestment: inv.amount },
-          // Real-time calculated returns (unrealized)
-          currentValue: calculatedReturns.currentValue,
-          returns: calculatedReturns.totalReturns,
-          rentalYieldEarned: calculatedReturns.rentalYieldEarned,
-          appreciationGain: calculatedReturns.appreciationGain,
-          holdingPeriodYears: calculatedReturns.holdingPeriodYears,
-          isAfterMaturity: calculatedReturns.isAfterMaturity,
-          // Original rates
-          rentalYieldRate: inv.rentalYieldRate || 0,
-          appreciationRate: inv.appreciationRate || 0,
-          penaltyRate: inv.penaltyRate || 0,
-          // Bond-specific fields
-          bondMaturityDate: inv.bondMaturityDate,
-          lockInEndDate: inv.lockInEndDate,
-          isInLockInPeriod: inv.isInLockInPeriod || false,
-          hasMatured: inv.hasMatured || false,
-          maturityPeriodYears: inv.maturityPeriodYears || 5,
-          property: inv.property
-        };
-      })
+          return {
+            _id: inv._id,
+            propertyId: inv.property._id,
+            propertyName: inv.property.title,
+            amount: inv.amount,
+            shares: inv.shares,
+            status: inv.status,
+            createdAt: inv.createdAt,
+            investedAt: inv.createdAt,
+            // Investment type and management fees
+            investmentType: inv.investmentType || 'simple_annual',
+            managementFee: inv.managementFee || { feePercentage: 0, feeAmount: 0, netInvestment: inv.amount },
+            // Real-time calculated returns (unrealized)
+            currentValue: calculatedReturns.currentValue,
+            returns: calculatedReturns.totalReturns,
+            rentalYieldEarned: calculatedReturns.rentalYieldEarned,
+            appreciationGain: calculatedReturns.appreciationGain,
+            holdingPeriodYears: calculatedReturns.holdingPeriodYears,
+            isAfterMaturity: calculatedReturns.isAfterMaturity,
+            // Original rates
+            rentalYieldRate: inv.rentalYieldRate || 0,
+            appreciationRate: inv.appreciationRate || 0,
+            penaltyRate: inv.penaltyRate || 0,
+            // Bond-specific fields
+            bondMaturityDate: inv.bondMaturityDate,
+            lockInEndDate: inv.lockInEndDate,
+            isInLockInPeriod: inv.isInLockInPeriod || false,
+            hasMatured: inv.hasMatured || false,
+            maturityPeriodYears: inv.maturityPeriodYears || 5,
+            property: inv.property
+          };
+        })
     });
   } catch (error) {
     logger.error('Get my investments error:', error);

@@ -337,6 +337,10 @@ class UserController {
       let totalInvested = 0;
 
       investments.forEach(investment => {
+        // Skip investments with null property references
+        if (!investment.property) {
+          return;
+        }
         const returns = calculateInvestmentReturns(investment);
         totalCurrentValue += returns.currentValue;
         totalInvested += returns.principalAmount;
