@@ -10,6 +10,7 @@ const mongoose = require("mongoose");
 const logger = require("../utils/logger");
 const otpEmailService = require("../utils/otpEmailService");
 const notificationService = require("../utils/notificationService");
+const passwordResetService = require("../utils/passwordResetService");
 const fs = require("fs");
 
 class AdminController {
