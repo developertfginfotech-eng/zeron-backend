@@ -332,6 +332,118 @@ class AuthController {
       next(error);
     }
   }
+
+  // Verify admin email OTP
+  async verifyOTP(req, res, next) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { email, otp } = req.body;
+
+      // Find user with pending_verification status
+      const user = await User.findOne({
+        email: email.toLowerCase(),
+        status: 'pending_verification'
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin account not found or already verified",
+        });
+      }
+
+      // Verify OTP using password reset service (reusing existing OTP infrastructure)
+      const otpVerification = await passwordResetService.verifyPasswordResetOTP(email, otp);
+
+      if (!otpVerification.valid) {
+        return res.status(400).json({
+          success: false,
+          message: otpVerification.reason || "Invalid or expired OTP",
+          attemptsRemaining: otpVerification.attemptsRemaining
+        });
+      }
+
+      // Update user status to active and mark email as verified
+      user.status = 'active';
+      user.emailVerified = true;
+      await user.save();
+
+      logger.info(`Admin email verified: ${email}`);
+
+      res.status(200).json({
+        success: true,
+        message: "Email verified successfully! Your account is now active.",
+        data: {
+          email: user.email,
+          status: user.status,
+          firstName: user.firstName,
+          lastName: user.lastName,
+        }
+      });
+
+    } catch (error) {
+      logger.error("Verify admin OTP error:", error);
+      next(error);
+    }
+  }
+
+  // Resend admin email OTP
+  async resendOTP(req, res, next) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { email } = req.body;
+
+      // Find user with pending_verification status
+      const user = await User.findOne({
+        email: email.toLowerCase(),
+        status: 'pending_verification'
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin account not found or already verified",
+        });
+      }
+
+      // Send OTP using password reset service
+      const result = await passwordResetService.sendPasswordResetOTP(email, req);
+
+      logger.info(`Admin OTP resent to: ${email}`, {
+        otpId: result.otpId
+      });
+
+      res.status(200).json({
+        success: true,
+        message: result.message || "OTP resent to your email",
+        data: {
+          email: email,
+          otpId: result.otpId,
+          fallbackMode: result.fallbackMode || false
+        }
+      });
+
+    } catch (error) {
+      logger.error("Resend admin OTP error:", error);
+      next(error);
+    }
+  }
 }
 
 module.exports = new AuthController();

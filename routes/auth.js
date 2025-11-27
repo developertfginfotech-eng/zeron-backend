@@ -91,10 +91,16 @@ const verifyOTPValidation = [
     .withMessage('OTP must be 6 digits')
 ];
 
+const resendOTPValidation = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email required')
+];
 
 const passwordResetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5, 
+  max: 5,
   message: {
     success: false,
     message: 'Too many password reset attempts, please try again later.'
@@ -107,5 +113,9 @@ router.post('/login', upload.none(), authLimiter, loginValidation, authControlle
 router.post('/forgot-password', upload.none(), passwordResetLimiter, forgotPasswordValidation, authController.forgotPassword);
 router.post('/reset-password', upload.none(), passwordResetLimiter, resetPasswordValidation, authController.resetPassword);
 router.post('/verify-reset-otp', upload.none(), authLimiter, verifyOTPValidation, authController.verifyResetOTP);
+
+// Admin OTP verification routes
+router.post('/verify-otp', upload.none(), authLimiter, verifyOTPValidation, authController.verifyOTP);
+router.post('/resend-otp', upload.none(), passwordResetLimiter, resendOTPValidation, authController.resendOTP);
 
 module.exports = router;
