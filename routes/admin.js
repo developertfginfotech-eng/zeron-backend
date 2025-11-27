@@ -39,6 +39,14 @@ router.get('/all-users', adminController.getAllRegularUsers);
 // Get all admin users
 router.get('/admin-users', adminController.getAdminUsers);
 
+// Get pending admins (awaiting verification) - super admin only
+router.get('/admin-users/pending/list', authorize('super_admin'), adminController.getPendingAdmins);
+
+// Verify/Approve a pending admin (super admin only)
+router.post('/admin-users/:id/verify', authorize('super_admin'), [
+  body('approved').isBoolean().withMessage('Approved must be boolean')
+], adminController.verifyAdmin);
+
 // Get specific admin user details (super admin only)
 router.get('/admin-users/:id', authorize('super_admin'), adminController.getAdminUserDetails);
 
