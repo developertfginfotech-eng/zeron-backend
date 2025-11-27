@@ -3,6 +3,7 @@ const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { authenticate, authorize } = require('../middleware/auth');
 const multer = require('multer');
+const { cloudinaryEnhance, imageCacheHeaders } = require('../middleware/cloudinary-enhance');
 const { body, query } = require('express-validator');
 
 // Configure multer for file uploads
@@ -111,11 +112,11 @@ router.put('/users/:id/kyc-status', authorize('super_admin', 'kyc_officer'), [
 
 
 
-// Create new property (super admin and property managers, requires OTP)
-router.post('/properties', authorize('super_admin', 'property_manager'), upload.array('images', 10), adminController.createProperty);
+// Create new property (super admin and property managers, requires OTP) - Single image upload
+router.post('/properties', authorize('super_admin', 'property_manager'), upload.single('image'), cloudinaryEnhance, adminController.createProperty);
 
-// Update property (super admin and property managers, requires OTP)
-router.patch('/properties/:id', authorize('super_admin', 'property_manager'), upload.array('images', 10), adminController.updateProperty);
+// Update property (super admin and property managers, requires OTP) - Single image upload
+router.patch('/properties/:id', authorize('super_admin', 'property_manager'), upload.single('image'), cloudinaryEnhance, adminController.updateProperty);
 
 // Delete property (super admin and property managers, requires OTP)
 router.delete('/properties/:id', authorize('super_admin', 'property_manager'), adminController.deleteProperty);
