@@ -408,33 +408,35 @@ class UserController {
         { $sort: { '_id.year': 1, '_id.month': 1 } }
       ]);
 
-      const portfolioDetails = investments.map(investment => {
-        const currentValue = investment.shares * investment.property.financials.pricePerShare;
-        const profitLoss = currentValue - investment.amount;
-        const profitLossPercentage = (profitLoss / investment.amount) * 100;
+      const portfolioDetails = investments
+        .filter(investment => investment.property) // Filter out investments with null properties
+        .map(investment => {
+          const currentValue = investment.shares * investment.property.financials.pricePerShare;
+          const profitLoss = currentValue - investment.amount;
+          const profitLossPercentage = (profitLoss / investment.amount) * 100;
 
-        return {
-          investmentId: investment._id,
-          property: {
-            id: investment.property._id,
-            title: investment.property.title,
-            titleAr: investment.property.titleAr,
-            location: investment.property.location,
-            image: investment.property.images?.[0]?.url,
-            status: investment.property.status
-          },
-          investment: {
-            shares: investment.shares,
-            originalAmount: investment.amount,
-            currentValue: currentValue,
-            profitLoss: profitLoss,
-            profitLossPercentage: profitLossPercentage,
-            totalReturnsReceived: investment.returns.totalReturnsReceived,
-            lastReturnDate: investment.returns.lastReturnDate,
-            investmentDate: investment.createdAt
-          }
-        };
-      });
+          return {
+            investmentId: investment._id,
+            property: {
+              id: investment.property._id,
+              title: investment.property.title,
+              titleAr: investment.property.titleAr,
+              location: investment.property.location,
+              image: investment.property.images?.[0]?.url,
+              status: investment.property.status
+            },
+            investment: {
+              shares: investment.shares,
+              originalAmount: investment.amount,
+              currentValue: currentValue,
+              profitLoss: profitLoss,
+              profitLossPercentage: profitLossPercentage,
+              totalReturnsReceived: investment.returns.totalReturnsReceived,
+              lastReturnDate: investment.returns.lastReturnDate,
+              investmentDate: investment.createdAt
+            }
+          };
+        });
 
       res.json({
         success: true,
@@ -457,7 +459,7 @@ class UserController {
           metadata: {
             lastUpdated: new Date(),
             totalProperties: summary.propertyCount,
-            activeInvestments: investments.filter(inv => inv.property.status === 'active').length
+            activeInvestments: investments.filter(inv => inv.property && inv.property.status === 'active').length
           }
         }
       });
