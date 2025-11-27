@@ -46,12 +46,20 @@ app.use(mongoSanitize());
 // Trust proxy - important for rate limiting behind reverse proxies
 app.set('trust proxy', 1);
 
-// ADD THIS: Serve static files for uploads
-app.use('/uploads', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
-  next();
-}, express.static('uploads'));
+// ADD THIS: Serve static files for uploads with caching
+const { imageCacheHeaders } = require('./middleware/cloudinary-enhance');
+app.use('/uploads',
+  (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  },
+  imageCacheHeaders,
+  express.static('uploads', {
+    maxAge: '1y',
+    etag: false
+  })
+);
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
