@@ -490,6 +490,11 @@ class UserController {
       const groupedByProperty = {};
 
       investments.forEach(investment => {
+        // Skip investments with null property references
+        if (!investment.property) {
+          return;
+        }
+
         const propertyId = investment.property._id.toString();
 
         if (!groupedByProperty[propertyId]) {
