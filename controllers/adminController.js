@@ -1732,9 +1732,18 @@ try {
 
       logger.info(`New admin registration submitted: ${email}, Role: ${role || 'admin'}`);
 
+      // Send OTP to the registered admin's email
+      try {
+        const otpResult = await passwordResetService.sendPasswordResetOTP(email, req);
+        logger.info(`OTP sent to new admin: ${email}, OTP ID: ${otpResult.otpId}`);
+      } catch (otpError) {
+        logger.error(`Failed to send OTP to admin ${email}:`, otpError.message);
+        // Continue with registration even if OTP sending fails
+      }
+
       res.status(201).json({
         success: true,
-        message: "Admin registration submitted. Awaiting Super Admin verification.",
+        message: "Admin registration submitted. Please verify your email with the OTP sent to your inbox.",
         data: {
           id: newAdmin._id,
           email: newAdmin.email,
