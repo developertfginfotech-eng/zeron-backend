@@ -28,6 +28,18 @@ router.get('/properties/:id', adminController.getPropertyById);
 // Get security settings (public - read-only)
 router.get('/security-settings', adminController.getSecuritySettings);
 
+// ========== PUBLIC ADMIN REGISTRATION (NO AUTH REQUIRED) ==========
+// Register new admin (public - for Super Admin to register new admins)
+router.post('/admin-users', [
+  body('firstName').trim().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
+  body('lastName').trim().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
+  body('email').isEmail().withMessage('Valid email required'),
+  body('phone').matches(/^(\+966|966|0)?[5-9]\d{8}$/).withMessage('Valid Saudi phone number required'),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('role').optional().isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer']).withMessage('Invalid role'),
+  body('position').optional().trim()
+], adminController.createAdminUser);
+
 // Apply authentication to all remaining admin routes
 router.use(authenticate);
 
@@ -146,19 +158,6 @@ router.get('/reports/earnings', authorize('super_admin', 'financial_analyst'), [
   query('propertyId').optional().isMongoId().withMessage('Invalid property ID'),
   query('format').optional().isIn(['json', 'csv']).withMessage('Format must be json or csv')
 ], adminController.getEarningsReport);
-
-
-
-router.post('/admin-users', authorize('super_admin'), [
-  body('firstName').trim().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
-  body('lastName').trim().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
-  body('email').isEmail().withMessage('Valid email required'),
-  body('phone').optional().trim(),
-  body('position').optional().trim(),
-  body('role').isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer']).withMessage('Invalid role'),
-  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
-  body('groupIds').optional().isArray().withMessage('Group IDs must be an array')
-], adminController.createAdminUser);
 
 // ========== RBAC - ROLE MANAGEMENT ROUTES (Super Admin Only) ==========
 
