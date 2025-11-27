@@ -531,5 +531,92 @@ async investInProperty(req, res) {
       });
     }
   }
+
+  // Deactivate property
+  async deactivateProperty(req, res) {
+    try {
+      const { id } = req.params;
+      const { reason, comment } = req.body;
+      const adminId = req.user?.id;
+
+      const property = await Property.findByIdAndUpdate(
+        id,
+        {
+          status: 'inactive',
+          deactivatedAt: new Date(),
+          deactivatedBy: adminId,
+          deactivationReason: reason,
+          deactivationComment: comment
+        },
+        { new: true }
+      );
+
+      if (!property) {
+        return res.status(404).json({
+          success: false,
+          message: 'Property not found'
+        });
+      }
+
+      logger.info(`Property deactivated: ${property.title} by admin ${adminId}`);
+
+      res.json({
+        success: true,
+        message: 'Property deactivated successfully',
+        data: property
+      });
+    } catch (error) {
+      logger.error('Error deactivating property:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deactivating property',
+        error: error.message
+      });
+    }
+  }
+
+  // Activate/Reactivate property
+  async activateProperty(req, res) {
+    try {
+      const { id } = req.params;
+      const adminId = req.user?.id;
+
+      const property = await Property.findByIdAndUpdate(
+        id,
+        {
+          status: 'active',
+          deactivatedAt: null,
+          deactivatedBy: null,
+          deactivationReason: null,
+          deactivationComment: null,
+          reactivatedAt: new Date(),
+          reactivatedBy: adminId
+        },
+        { new: true }
+      );
+
+      if (!property) {
+        return res.status(404).json({
+          success: false,
+          message: 'Property not found'
+        });
+      }
+
+      logger.info(`Property reactivated: ${property.title} by admin ${adminId}`);
+
+      res.json({
+        success: true,
+        message: 'Property reactivated successfully',
+        data: property
+      });
+    } catch (error) {
+      logger.error('Error reactivating property:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error reactivating property',
+        error: error.message
+      });
+    }
+  }
 }
 module.exports = new PropertyController();
