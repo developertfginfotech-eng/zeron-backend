@@ -48,7 +48,7 @@ const propertySchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ['draft', 'active', 'fully_funded', 'completed', 'cancelled', 'upcoming'],
+    enum: ['draft', 'active', 'fully_funded', 'completed', 'cancelled', 'upcoming', 'inactive'],
     default: 'draft'
   },
 
@@ -113,6 +113,17 @@ const propertySchema = new mongoose.Schema({
   }],
 
   isActive: { type: Boolean, default: true },
+
+  // Deactivation tracking
+  deactivatedAt: { type: Date, default: null },
+  deactivatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  deactivationReason: { type: String, default: null },
+  deactivationComment: { type: String, default: null },
+
+  // Reactivation tracking
+  reactivatedAt: { type: Date, default: null },
+  reactivatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
