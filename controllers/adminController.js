@@ -1581,14 +1581,7 @@ try {
 
   async createAdminUser(req, res) {
     try {
-      const { firstName, lastName, email, role, password } = req.body;
-
-      if (req.user.role !== "super_admin") {
-        return res.status(403).json({
-          success: false,
-          message: "Only super admins can create admin users",
-        });
-      }
+      const { firstName, lastName, email, role, password, position } = req.body;
 
       const existingUser = await User.findOne({ email: email.toLowerCase() });
       if (existingUser) {
@@ -1603,22 +1596,32 @@ try {
         lastName,
         email: email.toLowerCase(),
         password,
-        role,
-        status: "active",
-        kycStatus: "approved",
-        emailVerified: true,
+        role: role || "admin", // Default to "admin" role
+        status: "pending_verification", // Changed to pending - requires Super Admin approval
+        kycStatus: "pending",
+        emailVerified: false,
+        position: position || null,
       });
 
       await newAdmin.save();
 
+      logger.info(`New admin registration submitted: ${email}, Role: ${role || 'admin'}`);
+
       res.status(201).json({
         success: true,
-        message: "Administrator created successfully",
+        message: "Admin registration submitted. Awaiting Super Admin verification.",
+        data: {
+          id: newAdmin._id,
+          email: newAdmin.email,
+          status: newAdmin.status,
+        }
       });
     } catch (error) {
+      logger.error("Error creating admin user:", error);
       res.status(500).json({
         success: false,
         message: "Error creating administrator",
+        error: error.message,
       });
     }
   }

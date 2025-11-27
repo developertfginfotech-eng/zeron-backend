@@ -137,6 +137,23 @@ class AuthController {
         });
       }
 
+      // Check if admin is pending verification
+      if (user.status === "pending_verification") {
+        return res.status(403).json({
+          success: false,
+          message: "Your admin account is pending verification by a Super Admin. Please wait for approval.",
+          status: "pending_verification",
+        });
+      }
+
+      // Check if account is inactive or suspended
+      if (user.status === "inactive" || user.status === "suspended") {
+        return res.status(403).json({
+          success: false,
+          message: "Your account has been deactivated. Contact your administrator.",
+        });
+      }
+
       // Reset login attempts and update last login
       if (user.loginAttempts > 0) {
         await user.updateOne({
