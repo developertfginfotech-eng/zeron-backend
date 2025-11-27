@@ -21,7 +21,7 @@ class UserController {
         });
       }
 
-      // Simple response with just basic info and KYC status
+      // Response with profile data included
       res.json({
         success: true,
         data: {
@@ -47,7 +47,8 @@ class UserController {
             totalReturns: user.investmentSummary?.totalReturns || 0,
             propertyCount: user.investmentSummary?.propertyCount || 0,
             lastInvestmentDate: user.investmentSummary?.lastInvestmentDate || null
-          }
+          },
+          profileData: user.profileData || null
         }
       });
 
@@ -75,11 +76,11 @@ class UserController {
 
       const allowedFields = [
         'firstName', 'lastName', 'phone', 'address', 'preferences',
-        'dateOfBirth', 'nationality'
+        'dateOfBirth', 'nationality', 'profileData'
       ];
-      
+
       const updateData = {};
-      
+
       allowedFields.forEach(field => {
         if (req.body[field] !== undefined) {
           updateData[field] = req.body[field];
@@ -112,7 +113,8 @@ class UserController {
           phone: user.phone,
           status: user.status,
           kycStatus: user.kycStatus,
-          kycUpdated: user.kycStatus === 'approved'
+          kycUpdated: user.kycStatus === 'approved',
+          profileData: user.profileData || null
         }
       });
     } catch (error) {
