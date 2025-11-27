@@ -2923,6 +2923,12 @@ try {
           // Properties invested in
           properties: investmentData?.properties || [],
 
+          // Profile data (Investment Profile, Banking, etc.)
+          profileData: investor.profileData || null,
+
+          // Investment summary
+          investmentSummary: investor.investmentSummary || null,
+
           // KYC details (if available)
           kyc: kycData ? {
             nationality: kycData.nationality,
