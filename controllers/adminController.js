@@ -2478,6 +2478,8 @@ try {
           investors: investors.map(inv => ({
             id: inv._id,
             name: inv.investor.fullName,
+            firstName: inv.investor.firstName,
+            lastName: inv.investor.lastName,
             email: inv.investor.email,
             phone: inv.investor.phone,
             kycStatus: inv.investor.kycStatus,
@@ -2488,7 +2490,9 @@ try {
             properties: inv.properties,
             firstInvestment: inv.firstInvestment,
             lastInvestment: inv.lastInvestment,
-            joinedDate: inv.investor.createdAt
+            joinedDate: inv.investor.createdAt,
+            profileData: inv.investor.profileData || null,
+            investmentSummary: inv.investor.investmentSummary || null
           })),
           pagination: {
             page: pageNum,
