@@ -2472,6 +2472,33 @@ try {
         `Admin fetched active investors - Admin: ${req.user.id}, Page: ${page}, Total: ${totalInvestors}`
       );
 
+      // Fetch transactions for each investor
+      const investorIds = investors.map(inv => inv._id);
+      const transactionsMap = new Map();
+
+      if (investorIds.length > 0) {
+        const Transaction = require('../models/Transaction');
+        const transactions = await Transaction.find({
+          user: { $in: investorIds }
+        }).sort({ createdAt: -1 });
+
+        transactions.forEach(t => {
+          const userId = t.user.toString();
+          if (!transactionsMap.has(userId)) {
+            transactionsMap.set(userId, []);
+          }
+          transactionsMap.get(userId).push({
+            id: t._id,
+            type: t.type,
+            amount: t.amount,
+            description: t.description,
+            reference: t.reference,
+            status: t.status,
+            processedAt: t.processedAt
+          });
+        });
+      }
+
       res.json({
         success: true,
         data: {
@@ -2492,7 +2519,8 @@ try {
             lastInvestment: inv.lastInvestment,
             joinedDate: inv.investor.createdAt,
             profileData: inv.investor.profileData || null,
-            investmentSummary: inv.investor.investmentSummary || null
+            investmentSummary: inv.investor.investmentSummary || null,
+            transactions: transactionsMap.get(inv._id.toString()) || []
           })),
           pagination: {
             page: pageNum,
