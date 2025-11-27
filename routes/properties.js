@@ -104,11 +104,27 @@ router.get('/:id',
 );
 
 // POST /api/properties/:id/invest - Invest in property
-router.post('/:id/invest', 
+router.post('/:id/invest',
   authenticate,
   investmentLimiter,
   investmentValidation,
   propertyController.investInProperty
+);
+
+// PATCH /api/properties/:id/deactivate - Deactivate property
+router.patch('/:id/deactivate',
+  authenticate,
+  param('id').isMongoId().withMessage('Invalid property ID'),
+  body('reason').optional().trim(),
+  body('comment').optional().trim(),
+  propertyController.deactivateProperty
+);
+
+// PATCH /api/properties/:id/activate - Reactivate property
+router.patch('/:id/activate',
+  authenticate,
+  param('id').isMongoId().withMessage('Invalid property ID'),
+  propertyController.activateProperty
 );
 
 module.exports = router;
