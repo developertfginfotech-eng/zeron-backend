@@ -1706,7 +1706,7 @@ try {
 
   async createAdminUser(req, res) {
     try {
-      const { firstName, lastName, email, role, password, position } = req.body;
+      const { firstName, lastName, email, phone, role, password, position } = req.body;
 
       const existingUser = await User.findOne({ email: email.toLowerCase() });
       if (existingUser) {
@@ -1720,6 +1720,7 @@ try {
         firstName,
         lastName,
         email: email.toLowerCase(),
+        phone, // Add phone field
         password,
         role: role || "admin", // Default to "admin" role
         status: "pending_verification", // Changed to pending - requires Super Admin approval
