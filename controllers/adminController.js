@@ -1741,11 +1741,12 @@ try {
         }
       });
     } catch (error) {
-      logger.error("Error creating admin user:", error);
+      logger.error("Error creating admin user:", error.message, error.stack);
       res.status(500).json({
         success: false,
         message: "Error creating administrator",
         error: error.message,
+        details: error.errors ? Object.values(error.errors).map(e => e.message) : undefined
       });
     }
   }
