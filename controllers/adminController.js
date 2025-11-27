@@ -352,6 +352,130 @@ class AdminController {
     }
   }
 
+  // Get pending admins (awaiting verification)
+  async getPendingAdmins(req, res) {
+    try {
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          message: "Only Super Admins can view pending admins"
+        });
+      }
+
+      const { page = 1, limit = 20, sort = "-createdAt" } = req.query;
+
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const skip = (pageNum - 1) * limitNum;
+
+      const [pendingAdmins, totalPending] = await Promise.all([
+        User.find({ status: "pending_verification" })
+          .select("-password")
+          .sort(sort)
+          .skip(skip)
+          .limit(limitNum)
+          .lean(),
+        User.countDocuments({ status: "pending_verification" })
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          pendingAdmins: pendingAdmins.map(user => ({
+            id: user._id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            position: user.position,
+            createdAt: user.createdAt,
+            fullName: `${user.firstName} ${user.lastName}`
+          })),
+          pagination: {
+            page: pageNum,
+            pages: Math.ceil(totalPending / limitNum),
+            total: totalPending,
+            limit: limitNum
+          }
+        }
+      });
+    } catch (error) {
+      logger.error("Get pending admins error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching pending admins"
+      });
+    }
+  }
+
+  // Verify and approve a pending admin (Super Admin only)
+  async verifyAdmin(req, res) {
+    try {
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          message: "Only Super Admins can verify admins"
+        });
+      }
+
+      const { adminId, approved } = req.body;
+
+      const admin = await User.findById(adminId);
+
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found"
+        });
+      }
+
+      if (admin.status !== 'pending_verification') {
+        return res.status(400).json({
+          success: false,
+          message: "This admin is not pending verification"
+        });
+      }
+
+      if (approved) {
+        // Approve the admin
+        admin.status = "active";
+        admin.emailVerified = true;
+        await admin.save();
+
+        logger.info(`Admin approved by Super Admin: ${admin.email} (${req.user.email})`);
+
+        res.json({
+          success: true,
+          message: `Admin ${admin.firstName} ${admin.lastName} has been verified and approved`,
+          data: {
+            id: admin._id,
+            email: admin.email,
+            status: admin.status,
+            role: admin.role
+          }
+        });
+      } else {
+        // Reject the admin
+        await User.deleteOne({ _id: adminId });
+
+        logger.info(`Admin rejected by Super Admin: ${admin.email} (${req.user.email})`);
+
+        res.json({
+          success: true,
+          message: `Admin registration for ${admin.firstName} ${admin.lastName} has been rejected`,
+        });
+      }
+    } catch (error) {
+      logger.error("Verify admin error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error verifying admin",
+        error: error.message
+      });
+    }
+  }
+
   // Get admin user details
   async getAdminUserDetails(req, res) {
     try {
