@@ -43,6 +43,9 @@ app.use(cors({
 
 app.use(mongoSanitize());
 
+// Trust proxy - important for rate limiting behind reverse proxies
+app.set('trust proxy', 1);
+
 // ADD THIS: Serve static files for uploads
 app.use('/uploads', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -52,7 +55,13 @@ app.use('/uploads', (req, res, next) => {
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
+  legacyHeaders: false, // Disable `X-RateLimit-*` headers
+  skip: (req) => {
+    // Skip rate limiting for health check and admin registration
+    return req.path === '/health' || req.path === '/api/admin/admin-users' && req.method === 'POST';
+  }
 });
 app.use('/api/', limiter);
 

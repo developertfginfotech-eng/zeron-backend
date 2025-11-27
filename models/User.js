@@ -40,7 +40,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'admin', 'super_admin'],
+    enum: ['user', 'admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'],
     default: 'user'
   },
   // Enhanced RBAC system
@@ -62,7 +62,7 @@ const userSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'suspended', 'pending'],
+    enum: ['active', 'suspended', 'pending', 'pending_verification', 'inactive'],
     default: 'active'
   },
   kycStatus: {
