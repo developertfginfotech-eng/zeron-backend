@@ -54,6 +54,8 @@ router.get('/my-investments', authenticate, async (req, res) => {
             rentalYieldRate: inv.rentalYieldRate || 0,
             appreciationRate: inv.appreciationRate || 0,
             penaltyRate: inv.penaltyRate || 0,
+            // Graduated penalties (if available)
+            graduatedPenalties: inv.graduatedPenalties || [],
             // Bond-specific fields
             bondMaturityDate: inv.bondMaturityDate,
             lockInEndDate: inv.lockInEndDate,
