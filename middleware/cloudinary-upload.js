@@ -57,6 +57,12 @@ const upload = multer({
 // Upload to Cloudinary with fallback to local storage
 const uploadToCloudinary = async (file) => {
   return new Promise((resolve, reject) => {
+    console.log('Starting Cloudinary upload with config:', {
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      apiKey: process.env.CLOUDINARY_API_KEY ? '***' : 'MISSING',
+      apiSecret: process.env.CLOUDINARY_API_SECRET ? '***' : 'MISSING'
+    });
+
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: 'zeron-investments',
@@ -68,13 +74,30 @@ const uploadToCloudinary = async (file) => {
       },
       (error, result) => {
         if (error) {
-          logger.warn(`Cloudinary upload failed: ${error.message}, falling back to local storage`);
+          console.error('Cloudinary upload callback error:', {
+            message: error.message,
+            code: error.code,
+            status: error.status,
+            http_code: error.http_code
+          });
+          logger.error(`Cloudinary upload failed: ${error.message}`);
           reject(error);
         } else {
+          console.log('Cloudinary upload callback success:', {
+            publicId: result.public_id,
+            secureUrl: result.secure_url,
+            width: result.width,
+            height: result.height
+          });
           resolve(result);
         }
       }
     );
+
+    uploadStream.on('error', (error) => {
+      console.error('Cloudinary stream error:', error);
+      reject(error);
+    });
 
     uploadStream.end(file.buffer);
   });
@@ -196,6 +219,7 @@ const processFiles = async (req, res, next) => {
       // Try Cloudinary first
       if (cloudinaryConfigured) {
         try {
+          console.log(`Attempting Cloudinary upload for: ${file.originalname}`);
           result = await uploadToCloudinary(file);
           uploadedFiles.push({
             url: result.secure_url,
@@ -204,10 +228,19 @@ const processFiles = async (req, res, next) => {
             source: 'cloudinary',
             optimized: result.eager
           });
+          console.log(`✓ File uploaded to Cloudinary: ${result.public_id}`);
+          console.log(`  URL: ${result.secure_url}`);
           logger.info(`File uploaded to Cloudinary: ${result.public_id}`);
         } catch (cloudinaryError) {
           // Fallback to local storage
-          logger.warn(`Cloudinary failed, using local storage for ${file.originalname}`);
+          console.error(`✗ Cloudinary upload failed:`, {
+            error: cloudinaryError.message,
+            code: cloudinaryError.code,
+            status: cloudinaryError.status,
+            filename: file.originalname
+          });
+          logger.error(`Cloudinary failed for ${file.originalname}:`, cloudinaryError);
+          logger.warn(`Falling back to local storage for ${file.originalname}`);
           result = await saveToLocalDisk(file);
           uploadedFiles.push({
             ...result,
