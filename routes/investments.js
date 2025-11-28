@@ -220,6 +220,9 @@ router.post('/',
         ? (propertySettings.lockingPeriodYears !== null ? propertySettings.lockingPeriodYears : 1)
         : 1; // Annual plans always 1 year
 
+      // Get graduated penalties from property (if available)
+      const graduatedPenalties = propertySettings.graduatedPenalties || [];
+
       // Maturity date in real years (display purposes)
       // NOTE: Returns calculation uses accelerated time (1 hour = 1 year) for testing
       const maturityDateMs = Date.now() + maturityPeriod * 365 * 24 * 60 * 60 * 1000; // years
@@ -242,6 +245,8 @@ router.post('/',
         rentalYieldRate: rentalYield,
         appreciationRate: appreciation,
         penaltyRate: penalty,
+        // Store graduated penalties for proper withdrawal calculation
+        graduatedPenalties: graduatedPenalties,
         maturityDate: new Date(maturityDateMs),
         // For bond investments, set bondMaturityDate and lockInEndDate
         bondMaturityDate: isBondInvestment ? new Date(maturityDateMs) : undefined,
@@ -559,13 +564,22 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
     let totalValue = principalAmount + totalRentalYield;
     let penalty = 0;
     let withdrawalAmount = 0;
+    let actualPenaltyRate = penaltyRate;
 
     if (isEarlyWithdrawal) {
       // EARLY WITHDRAWAL (Before Maturity)
       // User gets: Principal + Rental Yield - Penalty
       // NO appreciation gains (only after maturity)
 
-      penalty = principalAmount * (penaltyRate / 100);
+      // Determine penalty rate: prefer graduated penalties if available
+      if (investment.graduatedPenalties && investment.graduatedPenalties.length > 0) {
+        // Calculate current year of investment
+        const currentYear = Math.floor((holdingPeriodYears)) + 1;
+        const penaltyTier = investment.graduatedPenalties.find(p => p.year === currentYear);
+        actualPenaltyRate = penaltyTier ? penaltyTier.penaltyPercentage : (penaltyRate || 0);
+      }
+
+      penalty = principalAmount * (actualPenaltyRate / 100);
       withdrawalAmount = principalAmount + totalRentalYield - penalty;
 
     } else {
@@ -660,12 +674,12 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
         rates: {
           rentalYieldRate: `${rentalYieldRate}%`,
           appreciationRate: `${appreciationRate}%`,
-          penaltyRate: isEarlyWithdrawal ? `${penaltyRate}%` : 'N/A'
+          penaltyRate: isEarlyWithdrawal ? `${actualPenaltyRate}%` : 'N/A'
         },
         newWalletBalance: user.wallet.balance
       },
       message: isEarlyWithdrawal
-        ? `Early withdrawal completed with ${penaltyRate}% penalty. Amount credited: SAR ${withdrawalAmount.toFixed(2)}`
+        ? `Early withdrawal completed with ${actualPenaltyRate}% penalty (Year ${Math.floor(holdingPeriodYears) + 1}). Amount credited: SAR ${withdrawalAmount.toFixed(2)}`
         : `Withdrawal after maturity completed. Total returns: SAR ${(totalRentalYield + appreciationGain).toFixed(2)}`
     });
 

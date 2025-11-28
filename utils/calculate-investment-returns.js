@@ -1,6 +1,9 @@
 /**
  * Calculate investment returns based on holding period
  * Used for displaying real-time returns on dashboard
+ *
+ * NOTE: This function calculates UNREALIZED returns (what the investment is worth now)
+ * It applies management fees to the returns, not the principal
  */
 
 function calculateInvestmentReturns(investment) {
@@ -8,8 +11,11 @@ function calculateInvestmentReturns(investment) {
   const investmentDate = new Date(investment.createdAt);
   const maturityDate = investment.maturityDate ? new Date(investment.maturityDate) : null;
 
-  // Get investment amounts first (needed for early returns)
+  // Get principal amount (user's actual investment)
   const principalAmount = investment.managementFee?.netInvestment || investment.amount;
+
+  // Get management fee percentage (from investment or property settings)
+  const managementFeePercentage = investment.managementFee?.feePercentage || 0;
 
   // Calculate holding period in milliseconds
   const holdingPeriodMs = now - investmentDate;
@@ -48,21 +54,33 @@ function calculateInvestmentReturns(investment) {
 
   // Calculate rental yield (earned throughout holding period, capped at maturity period)
   const annualRentalIncome = principalAmount * (rentalYieldRate / 100);
-  const rentalYieldEarned = annualRentalIncome * Math.min(holdingPeriodYears, maturityPeriodYears);
+  const grossRentalYield = annualRentalIncome * Math.min(holdingPeriodYears, maturityPeriodYears);
+
+  // Apply management fee to rental yield
+  const rentalManagementFee = (grossRentalYield * managementFeePercentage) / 100;
+  const rentalYieldEarned = grossRentalYield - rentalManagementFee;
 
   // Calculate appreciation (only after maturity)
   let appreciationGain = 0;
+  let appreciationManagementFee = 0;
   if (isAfterMaturity) {
     const yearsAfterMaturity = Math.max(0, holdingPeriodYears - maturityPeriodYears);
     if (yearsAfterMaturity > 0) {
       const appreciatedValue = principalAmount * Math.pow(1 + appreciationRate / 100, yearsAfterMaturity);
-      appreciationGain = appreciatedValue - principalAmount;
+      const grossAppreciation = appreciatedValue - principalAmount;
+
+      // Apply management fee to appreciation
+      appreciationManagementFee = (grossAppreciation * managementFeePercentage) / 100;
+      appreciationGain = grossAppreciation - appreciationManagementFee;
     }
   }
 
   // Calculate current value for display (without penalty)
   // Penalty is only applied during actual withdrawal, not for display purposes
   const currentValue = principalAmount + rentalYieldEarned + appreciationGain;
+
+  // Track total management fees deducted
+  const totalManagementFees = rentalManagementFee + appreciationManagementFee;
 
   // Calculate withdrawal value (what user would get if withdrawn now)
   let withdrawalValue;
@@ -82,10 +100,15 @@ function calculateInvestmentReturns(investment) {
     principalAmount,
     holdingPeriodYears: parseFloat(holdingPeriodYears.toFixed(2)),
     rentalYieldEarned: parseFloat(rentalYieldEarned.toFixed(2)),
+    grossRentalYield: parseFloat(grossRentalYield.toFixed(2)),
+    rentalManagementFee: parseFloat(rentalManagementFee.toFixed(2)),
     appreciationGain: parseFloat(appreciationGain.toFixed(2)),
+    appreciationManagementFee: parseFloat(appreciationManagementFee.toFixed(2)),
     currentValue: parseFloat(currentValue.toFixed(2)),
     withdrawalValue: parseFloat(withdrawalValue.toFixed(2)),
     totalReturns: parseFloat(totalReturns.toFixed(2)),
+    totalManagementFees: parseFloat(totalManagementFees.toFixed(2)),
+    managementFeePercentage,
     isAfterMaturity,
     maturityDate: maturityDate ? maturityDate.toISOString() : null
   };
