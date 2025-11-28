@@ -1263,6 +1263,7 @@ async createProperty(req, res) {
       let parsedLocation = {};
       let parsedFinancials = {};
       let parsedInvestmentTerms = {};
+      let parsedManagementFees = null;
 
       try {
         parsedLocation =
@@ -1275,11 +1276,15 @@ async createProperty(req, res) {
           typeof investmentTerms === "string"
             ? JSON.parse(investmentTerms)
             : investmentTerms || {};
+        parsedManagementFees =
+          typeof managementFees === "string"
+            ? JSON.parse(managementFees)
+            : managementFees;
       } catch (parseError) {
         console.error("Error parsing JSON fields:", parseError);
         return res.status(400).json({
           success: false,
-          message: "Invalid JSON in location, financials, or investmentTerms fields",
+          message: "Invalid JSON in location, financials, investmentTerms, or managementFees fields",
         });
       }
 
