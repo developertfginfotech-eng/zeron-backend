@@ -1072,8 +1072,14 @@ async createProperty(req, res) {
       console.log(`Processing ${req.uploadedFiles.length} uploaded file(s)`);
 
       propertyData.images = req.uploadedFiles.map((file, index) => {
+        // Use the full URL from Cloudinary or local path
+        let imageUrl = file.url;
+
+        // If it's a local URL, keep it as is (the app serves from /uploads)
+        // If it's a Cloudinary URL, it's already a full URL
+
         const imageData = {
-          url: file.url,
+          url: imageUrl,  // Full URL (either Cloudinary or local)
           alt: `${title} - Image ${index + 1}`,
           isPrimary: index === 0,
           _id: new mongoose.Types.ObjectId(),
@@ -1083,7 +1089,8 @@ async createProperty(req, res) {
         console.log(`Image ${index + 1}:`, {
           url: imageData.url,
           source: imageData.source,
-          filename: file.filename
+          filename: file.filename,
+          isCloudinary: imageData.url.includes('cloudinary')
         });
 
         return imageData;
@@ -1309,17 +1316,30 @@ async createProperty(req, res) {
         updatedAt: new Date(),
       };
 
-      // Handle image uploads if any
-      if (req.files && req.files.length > 0) {
-        const newImages = req.files.map((file, index) => ({
-          url: `/uploads/${file.filename}`,
+      // Handle image uploads if any - check req.uploadedFiles from Cloudinary middleware
+      console.log("=== UPDATE PROPERTY IMAGE HANDLING ===");
+      console.log("req.uploadedFiles:", req.uploadedFiles);
+      console.log("req.file:", req.file);
+      console.log("req.files:", req.files);
+
+      if (req.uploadedFiles && req.uploadedFiles.length > 0) {
+        console.log(`Processing ${req.uploadedFiles.length} uploaded image(s)`);
+
+        const newImages = req.uploadedFiles.map((file, index) => ({
+          url: file.url,
           alt: `${updateData.title} - Image ${index + 1}`,
           isPrimary: index === 0,
           _id: new mongoose.Types.ObjectId(),
+          source: file.source || 'local'
         }));
+
+        console.log("New images to add:", newImages);
 
         // Keep existing images and add new ones
         updateData.images = [...(existingProperty.images || []), ...newImages];
+        console.log(`✓ Updated property with ${updateData.images.length} total images`);
+      } else {
+        console.log("⚠ No new images uploaded in this update");
       }
 
       // Update the property
