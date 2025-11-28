@@ -1335,8 +1335,8 @@ async createProperty(req, res) {
 
         console.log("New images to add:", newImages);
 
-        // Keep existing images and add new ones
-        updateData.images = [...(existingProperty.images || []), ...newImages];
+        // Replace images with new ones when updating
+        updateData.images = newImages;
         console.log(`✓ Updated property with ${updateData.images.length} total images`);
       } else {
         console.log("⚠ No new images uploaded in this update");
