@@ -924,6 +924,8 @@ async createProperty(req, res) {
       location,
       propertyType,
       financials,
+      investmentTerms,
+      managementFees,
       status,
       otp,
     } = req.body;
@@ -931,6 +933,7 @@ async createProperty(req, res) {
     // Parse JSON fields - handle both string and object formats
     let parsedLocation = {};
     let parsedFinancials = {};
+    let parsedInvestmentTerms = {};
 
     try {
       if (location) {
@@ -948,6 +951,15 @@ async createProperty(req, res) {
     } catch (err) {
       console.warn("Invalid financials JSON, using empty object");
       parsedFinancials = financials || {};
+    }
+
+    try {
+      if (investmentTerms) {
+        parsedInvestmentTerms = typeof investmentTerms === 'string' ? JSON.parse(investmentTerms) : investmentTerms;
+      }
+    } catch (err) {
+      console.warn("Invalid investmentTerms JSON, using empty object");
+      parsedInvestmentTerms = investmentTerms || {};
     }
 
     console.log("Parsed location:", parsedLocation);
@@ -1038,6 +1050,33 @@ async createProperty(req, res) {
       }
     }
 
+    // Construct managementFees object - handle both flat fields and structured object
+    let finalManagementFees = managementFees;
+    console.log("=== MANAGEMENT FEES PROCESSING (CREATE) ===");
+    console.log("Received managementFees:", managementFees);
+    console.log("Individual fields:", {
+      managementFeePercentage: req.body.managementFeePercentage,
+      managementFeeDeductionType: req.body.managementFeeDeductionType,
+      managementFeesEnabled: req.body.managementFeesEnabled
+    });
+
+    if (!finalManagementFees || typeof finalManagementFees !== 'object' || Array.isArray(finalManagementFees)) {
+      // If managementFees is not provided or is invalid, check for individual fields
+      const managementFeePercentage = req.body.managementFeePercentage;
+      const managementFeeDeductionType = req.body.managementFeeDeductionType;
+      const managementFeesEnabled = req.body.managementFeesEnabled;
+
+      finalManagementFees = {
+        percentage: managementFeePercentage ? Number(managementFeePercentage) : 0,
+        isActive: managementFeesEnabled === true || managementFeesEnabled === 'true',
+        deductionType: managementFeeDeductionType || 'upfront',
+        totalFeesCollected: 0
+      };
+      console.log("Constructed managementFees from individual fields:", finalManagementFees);
+    } else {
+      console.log("Using provided managementFees object:", finalManagementFees);
+    }
+
     // Create property with admin's chosen values - no restrictions
     const propertyData = {
       title: title.trim(),
@@ -1051,6 +1090,8 @@ async createProperty(req, res) {
         // Let admin set whatever values they want
         ...parsedFinancials
       },
+      investmentTerms: parsedInvestmentTerms,
+      managementFees: finalManagementFees,
       propertyType: propertyType || "residential",
       status: status || "active",
       images: [],
@@ -1150,6 +1191,9 @@ async createProperty(req, res) {
         id: property._id,
         title: property.title,
         status: property.status,
+        financials: property.financials,
+        investmentTerms: property.investmentTerms,
+        managementFees: property.managementFees,
         images: property.images.map(img => ({
           url: img.url,
           source: img.source || 'local'
@@ -1305,13 +1349,60 @@ async createProperty(req, res) {
         });
       }
 
+      // Construct managementFees object - handle both flat fields and structured object
+      let finalManagementFees = managementFees;
+      console.log("=== MANAGEMENT FEES PROCESSING (UPDATE) ===");
+      console.log("Property ID:", id);
+      console.log("Received managementFees:", managementFees);
+      console.log("Existing managementFees:", existingProperty.managementFees);
+      console.log("Individual fields:", {
+        managementFeePercentage: req.body.managementFeePercentage,
+        managementFeeDeductionType: req.body.managementFeeDeductionType,
+        managementFeesEnabled: req.body.managementFeesEnabled
+      });
+
+      if (!finalManagementFees || typeof finalManagementFees !== 'object' || Array.isArray(finalManagementFees)) {
+        // If managementFees is not provided or is invalid, check for individual fields
+        const managementFeePercentage = req.body.managementFeePercentage;
+        const managementFeeDeductionType = req.body.managementFeeDeductionType;
+        const managementFeesEnabled = req.body.managementFeesEnabled;
+
+        if (managementFeePercentage !== undefined || managementFeeDeductionType !== undefined || managementFeesEnabled !== undefined) {
+          // If any field is provided, construct the object
+          finalManagementFees = {
+            percentage: managementFeePercentage !== undefined ? Number(managementFeePercentage) : existingProperty.managementFees?.percentage || 0,
+            isActive: managementFeesEnabled !== undefined ? (managementFeesEnabled === true || managementFeesEnabled === 'true') : existingProperty.managementFees?.isActive || false,
+            deductionType: managementFeeDeductionType || existingProperty.managementFees?.deductionType || 'upfront',
+            totalFeesCollected: existingProperty.managementFees?.totalFeesCollected || 0
+          };
+          console.log("Constructed managementFees from individual fields:", finalManagementFees);
+        } else {
+          // If no fields provided, keep existing
+          finalManagementFees = existingProperty.managementFees;
+          console.log("No management fee fields provided, keeping existing:", finalManagementFees);
+        }
+      } else {
+        console.log("Using provided managementFees object:", finalManagementFees);
+      }
+
+      // Merge investmentTerms to preserve graduatedPenalties if not provided
+      const finalInvestmentTerms = {
+        ...(existingProperty.investmentTerms || {}),
+        ...parsedInvestmentTerms,
+        // Preserve graduatedPenalties if not explicitly provided in update
+        graduatedPenalties: parsedInvestmentTerms.graduatedPenalties !== undefined
+          ? parsedInvestmentTerms.graduatedPenalties
+          : existingProperty.investmentTerms?.graduatedPenalties || []
+      };
+
       // Prepare update data
       const updateData = {
         title: title || existingProperty.title,
         description: description || existingProperty.description,
         location: parsedLocation,
         financials: parsedFinancials,
-        investmentTerms: parsedInvestmentTerms,
+        investmentTerms: finalInvestmentTerms,
+        managementFees: finalManagementFees,
         propertyType: propertyType || existingProperty.propertyType,
         status: status || existingProperty.status,
         updatedAt: new Date(),
@@ -1359,6 +1450,9 @@ async createProperty(req, res) {
           id: updatedProperty._id,
           title: updatedProperty.title,
           status: updatedProperty.status,
+          financials: updatedProperty.financials,
+          investmentTerms: updatedProperty.investmentTerms,
+          managementFees: updatedProperty.managementFees,
         },
       });
     } catch (error) {
