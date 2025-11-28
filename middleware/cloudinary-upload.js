@@ -144,25 +144,53 @@ const handleMulterError = (error, req, res, next) => {
 
 // Validate uploaded files
 const validateFiles = (req, res, next) => {
-  if (req.files && req.files.length > 0) {
+  console.log("=== VALIDATE FILES MIDDLEWARE ===");
+  console.log("req.file:", req.file);
+  console.log("req.files:", req.files);
+
+  if (req.file) {
+    console.log("✓ Single file detected:", {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+    logger.info(`File uploaded - Name: ${req.file.originalname}, User: ${req.user?.id}`);
+  }
+
+  if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+    console.log(`✓ Multiple files detected: ${req.files.length}`);
     logger.info(`Files uploaded - Count: ${req.files.length}, User: ${req.user?.id}`);
   }
+
   next();
 };
 
 // Process files with Cloudinary + fallback
 const processFiles = async (req, res, next) => {
   try {
-    if (!req.files || req.files.length === 0) {
+    console.log("=== PROCESS FILES MIDDLEWARE ===");
+    console.log("req.file (single):", req.file ? 'exists' : 'undefined');
+    console.log("req.files (array):", req.files ? `${req.files.length} files` : 'undefined');
+
+    // Check for both single file (upload.single) and multiple files (upload.array)
+    const filesToProcess = req.file ? [req.file] : (req.files || []);
+
+    if (!filesToProcess || filesToProcess.length === 0) {
+      console.log("⚠ No files to process");
       return next();
     }
+
+    console.log(`Processing ${filesToProcess.length} file(s)`);
 
     const uploadedFiles = [];
     const cloudinaryConfigured = process.env.CLOUDINARY_CLOUD_NAME &&
                                  process.env.CLOUDINARY_API_KEY &&
                                  process.env.CLOUDINARY_API_SECRET;
 
-    for (const file of req.files) {
+    console.log("Cloudinary configured:", cloudinaryConfigured ? "YES" : "NO");
+
+    for (const file of filesToProcess) {
       let result;
 
       // Try Cloudinary first
@@ -196,9 +224,13 @@ const processFiles = async (req, res, next) => {
       }
     }
 
+    console.log(`✓ Processed ${uploadedFiles.length} file(s)`);
+    console.log("Uploaded files details:", uploadedFiles);
+
     req.uploadedFiles = uploadedFiles;
     next();
   } catch (error) {
+    console.error('File processing error:', error);
     logger.error('File processing error:', error);
     return res.status(500).json({
       success: false,

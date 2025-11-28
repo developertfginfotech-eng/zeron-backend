@@ -928,23 +928,30 @@ async createProperty(req, res) {
       otp,
     } = req.body;
 
-    // Parse JSON fields
+    // Parse JSON fields - handle both string and object formats
     let parsedLocation = {};
-let parsedFinancials = {};
+    let parsedFinancials = {};
 
-try {
-  parsedLocation = location ? JSON.parse(location) : {};
-} catch (err) {
-  console.warn("Invalid location JSON, using empty object");
-  parsedLocation = {};
-}
+    try {
+      if (location) {
+        parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+      }
+    } catch (err) {
+      console.warn("Invalid location JSON, using empty object");
+      parsedLocation = location || {};
+    }
 
-try {
-  parsedFinancials = financials ? JSON.parse(financials) : {};
-} catch (err) {
-  console.warn("Invalid financials JSON, using empty object");
-  parsedFinancials = {};
-}
+    try {
+      if (financials) {
+        parsedFinancials = typeof financials === 'string' ? JSON.parse(financials) : financials;
+      }
+    } catch (err) {
+      console.warn("Invalid financials JSON, using empty object");
+      parsedFinancials = financials || {};
+    }
+
+    console.log("Parsed location:", parsedLocation);
+    console.log("Parsed financials:", parsedFinancials);
 
     // SIMPLIFIED validation - only check for required title, no amount restrictions
     if (!title || title.trim().length === 0) {
