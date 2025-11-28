@@ -471,10 +471,14 @@ async investInProperty(req, res) {
       console.log('Lock-in End Date:', investment.lockInEndDate);
       console.log('Investment graduatedPenalties:', JSON.stringify(investment.graduatedPenalties, null, 2));
       console.log('Property graduatedPenalties:', JSON.stringify(property.investmentTerms?.graduatedPenalties, null, 2));
+      console.log('Property managementFees:', JSON.stringify(property.managementFees, null, 2));
 
       const withdrawalDetails = calculateWithdrawalAmount(investment, property);
 
       console.log('Calculated Penalty Info:', JSON.stringify(withdrawalDetails.penalty, null, 2));
+      console.log('Calculated Management Fee Info:', JSON.stringify(withdrawalDetails.managementFee, null, 2));
+      console.log('Total Value:', withdrawalDetails.totalValue);
+      console.log('Net Withdrawal Amount:', withdrawalDetails.netWithdrawalAmount);
       console.log('===================================');
 
       res.json({
