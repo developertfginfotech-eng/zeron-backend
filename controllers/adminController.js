@@ -1382,7 +1382,14 @@ async createProperty(req, res) {
           console.log("No management fee fields provided, keeping existing:", finalManagementFees);
         }
       } else {
-        console.log("Using provided managementFees object:", finalManagementFees);
+        // Merge provided managementFees object with existing data
+        finalManagementFees = {
+          ...(existingProperty.managementFees || {}),
+          ...finalManagementFees,
+          // Always preserve totalFeesCollected as it's managed by investments
+          totalFeesCollected: existingProperty.managementFees?.totalFeesCollected || 0
+        };
+        console.log("Merged managementFees object with existing data:", finalManagementFees);
       }
 
       // Merge investmentTerms to preserve graduatedPenalties if not provided
@@ -1395,16 +1402,29 @@ async createProperty(req, res) {
           : existingProperty.investmentTerms?.graduatedPenalties || []
       };
 
+      // Merge location with existing data to avoid losing data
+      const finalLocation = {
+        ...(existingProperty.location || {}),
+        ...Object.keys(parsedLocation).length > 0 ? parsedLocation : {}
+      };
+
+      // Merge financials with existing data to avoid losing data
+      const finalFinancials = {
+        ...(existingProperty.financials || {}),
+        ...Object.keys(parsedFinancials).length > 0 ? parsedFinancials : {}
+      };
+
       // Prepare update data
       const updateData = {
         title: title || existingProperty.title,
         description: description || existingProperty.description,
-        location: parsedLocation,
-        financials: parsedFinancials,
+        location: finalLocation,
+        financials: finalFinancials,
         investmentTerms: finalInvestmentTerms,
         managementFees: finalManagementFees,
         propertyType: propertyType || existingProperty.propertyType,
         status: status || existingProperty.status,
+        lastModifiedBy: userId,
         updatedAt: new Date(),
       };
 
