@@ -1193,6 +1193,7 @@ async createProperty(req, res) {
         propertyType,
         financials,
         investmentTerms,
+        managementFees,
         status,
         otp,
       } = req.body;
