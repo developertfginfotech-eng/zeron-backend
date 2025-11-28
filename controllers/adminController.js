@@ -1372,11 +1372,12 @@ async createProperty(req, res) {
       }
 
       // Construct managementFees object - handle both flat fields and structured object
-      let finalManagementFees = managementFees;
+      let finalManagementFees = parsedManagementFees;
       console.log("=== MANAGEMENT FEES PROCESSING (UPDATE) ===");
       console.log("Property ID:", id);
-      console.log("Received managementFees:", managementFees);
-      console.log("Type of managementFees:", typeof managementFees, "| Is array:", Array.isArray(managementFees));
+      console.log("Received managementFees (raw):", managementFees);
+      console.log("Parsed managementFees:", parsedManagementFees);
+      console.log("Type of parsedManagementFees:", typeof parsedManagementFees, "| Is array:", Array.isArray(parsedManagementFees));
       console.log("Existing managementFees:", existingProperty.managementFees);
       console.log("Individual fields:", {
         managementFeePercentage: req.body.managementFeePercentage,
