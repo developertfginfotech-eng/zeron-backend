@@ -1074,7 +1074,14 @@ async createProperty(req, res) {
       };
       console.log("Constructed managementFees from individual fields:", finalManagementFees);
     } else {
-      console.log("Using provided managementFees object:", finalManagementFees);
+      // Merge provided managementFees object with default values
+      finalManagementFees = {
+        percentage: finalManagementFees.percentage !== undefined ? Number(finalManagementFees.percentage) : 0,
+        isActive: finalManagementFees.isActive !== undefined ? finalManagementFees.isActive : false,
+        deductionType: finalManagementFees.deductionType || 'upfront',
+        totalFeesCollected: 0
+      };
+      console.log("Using provided managementFees object with defaults:", finalManagementFees);
     }
 
     // Create property with admin's chosen values - no restrictions
@@ -1242,6 +1249,16 @@ async createProperty(req, res) {
         otp,
       } = req.body;
 
+      console.log("=== RECEIVED DATA FROM FRONTEND ===");
+      console.log("investmentTerms (raw):", investmentTerms);
+      console.log("managementFees (raw):", managementFees);
+      console.log("Individual management fee fields:", {
+        managementFeePercentage: req.body.managementFeePercentage,
+        managementFeesEnabled: req.body.managementFeesEnabled,
+        managementFeeDeductionType: req.body.managementFeeDeductionType
+      });
+      console.log("All req.body keys:", Object.keys(req.body));
+
       // Parse JSON fields
       let parsedLocation = {};
       let parsedFinancials = {};
@@ -1354,12 +1371,14 @@ async createProperty(req, res) {
       console.log("=== MANAGEMENT FEES PROCESSING (UPDATE) ===");
       console.log("Property ID:", id);
       console.log("Received managementFees:", managementFees);
+      console.log("Type of managementFees:", typeof managementFees, "| Is array:", Array.isArray(managementFees));
       console.log("Existing managementFees:", existingProperty.managementFees);
       console.log("Individual fields:", {
         managementFeePercentage: req.body.managementFeePercentage,
         managementFeeDeductionType: req.body.managementFeeDeductionType,
         managementFeesEnabled: req.body.managementFeesEnabled
       });
+      console.log("Parsed investmentTerms:", parsedInvestmentTerms);
 
       if (!finalManagementFees || typeof finalManagementFees !== 'object' || Array.isArray(finalManagementFees)) {
         // If managementFees is not provided or is invalid, check for individual fields
@@ -1454,10 +1473,19 @@ async createProperty(req, res) {
         console.log("⚠ No new images uploaded in this update");
       }
 
+      console.log("=== FINAL UPDATE DATA ===");
+      console.log("investmentTerms:", updateData.investmentTerms);
+      console.log("managementFees:", updateData.managementFees);
+      console.log("financials:", updateData.financials);
+
       // Update the property
       const updatedProperty = await Property.findByIdAndUpdate(id, updateData, {
         new: true,
       });
+
+      console.log("=== UPDATED PROPERTY FROM DB ===");
+      console.log("investmentTerms:", updatedProperty.investmentTerms);
+      console.log("managementFees:", updatedProperty.managementFees);
 
       logger.info(
         `Property updated successfully - ID: ${updatedProperty._id}, Title: ${updatedProperty.title}, Updated by: ${userId}`
