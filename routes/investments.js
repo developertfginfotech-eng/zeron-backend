@@ -695,4 +695,43 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
   }
 });
 
+// Get investment returns and withdrawal details (for withdrawal dialog)
+router.get('/:id/returns', authenticate, async (req, res) => {
+  try {
+    const investment = await Investment.findById(req.params.id).populate('property');
+
+    if (!investment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Investment not found'
+      });
+    }
+
+    // Verify ownership
+    if (investment.user.toString() !== req.user.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view this investment'
+      });
+    }
+
+    // Calculate withdrawal details using the utility function
+    const { calculateWithdrawalAmount } = require('../utils/investment-calculations');
+    const withdrawalDetails = calculateWithdrawalAmount(investment, investment.property);
+
+    res.json({
+      success: true,
+      data: withdrawalDetails
+    });
+
+  } catch (error) {
+    logger.error('Get investment returns error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching investment returns',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
