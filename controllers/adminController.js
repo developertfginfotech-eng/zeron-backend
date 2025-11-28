@@ -1056,14 +1056,46 @@ try {
       updatedAt: new Date(),
     };
 
-    // Handle image uploads
-    if (req.files && req.files.length > 0) {
-      propertyData.images = req.files.map((file, index) => ({
-        url: `/uploads/${file.filename}`,
-        alt: `${title} - Image ${index + 1}`,
-        isPrimary: index === 0,
+    // Handle image uploads from Cloudinary
+    console.log("=== IMAGE UPLOAD DETAILS ===");
+    console.log("Uploaded files:", req.uploadedFiles);
+    console.log("Raw file object:", req.file);
+
+    if (req.uploadedFiles && req.uploadedFiles.length > 0) {
+      console.log(`Processing ${req.uploadedFiles.length} uploaded file(s)`);
+
+      propertyData.images = req.uploadedFiles.map((file, index) => {
+        const imageData = {
+          url: file.url,
+          alt: `${title} - Image ${index + 1}`,
+          isPrimary: index === 0,
+          _id: new mongoose.Types.ObjectId(),
+          source: file.source || 'unknown'
+        };
+
+        console.log(`Image ${index + 1}:`, {
+          url: imageData.url,
+          source: imageData.source,
+          filename: file.filename
+        });
+
+        return imageData;
+      });
+
+      console.log(`✓ Successfully processed ${propertyData.images.length} image(s) for property`);
+    } else if (req.file) {
+      // Fallback for single file upload (non-Cloudinary)
+      console.log("Fallback: Using single file upload");
+      propertyData.images = [{
+        url: `/uploads/${req.file.filename}`,
+        alt: `${title} - Image 1`,
+        isPrimary: true,
         _id: new mongoose.Types.ObjectId(),
-      }));
+        source: 'local'
+      }];
+      console.log("✓ Single image file processed");
+    } else {
+      console.log("⚠ No images uploaded with this property");
     }
 
     // Create the property
@@ -1071,6 +1103,21 @@ try {
     await property.save();
 
     console.log(`Property created by admin - Value: ${propertyData.financials.totalValue}`);
+    console.log("=== PROPERTY CREATION SUMMARY ===");
+    console.log("Property ID:", property._id);
+    console.log("Title:", property.title);
+    console.log("Status:", property.status);
+    console.log("Images attached:", property.images.length);
+    if (property.images.length > 0) {
+      console.log("Image details:", property.images.map(img => ({
+        url: img.url,
+        source: img.source,
+        primary: img.isPrimary
+      })));
+    }
+    console.log("Total Value:", propertyData.financials.totalValue);
+    console.log("✓ Property saved to database successfully");
+    console.log("================================\n");
 
     // Send notification to all admins about new property creation
     try {
@@ -1081,6 +1128,7 @@ try {
       // Continue without failing the property creation
     }
 
+    console.log("✓ Sending successful response with property data");
     res.status(201).json({
       success: true,
       message: "Property created successfully",
@@ -1088,6 +1136,10 @@ try {
         id: property._id,
         title: property.title,
         status: property.status,
+        images: property.images.map(img => ({
+          url: img.url,
+          source: img.source || 'local'
+        }))
       },
     });
 

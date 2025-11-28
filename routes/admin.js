@@ -2,23 +2,8 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { authenticate, authorize } = require('../middleware/auth');
-const multer = require('multer');
-const { cloudinaryEnhance, imageCacheHeaders } = require('../middleware/cloudinary-enhance');
+const cloudinaryUpload = require('../middleware/cloudinary-upload');
 const { body, query } = require('express-validator');
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + '.' + file.originalname.split('.').pop());
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }
-});
 
 // Public property browsing - no authentication required
 router.get('/properties', adminController.getProperties);
@@ -112,11 +97,11 @@ router.put('/users/:id/kyc-status', authorize('super_admin', 'kyc_officer'), [
 
 
 
-// Create new property (super admin and property managers, requires OTP) - Single image upload
-router.post('/properties', authorize('super_admin', 'property_manager'), upload.single('image'), cloudinaryEnhance, adminController.createProperty);
+// Create new property (super admin and property managers, requires OTP) - Single image upload with Cloudinary
+router.post('/properties', authorize('super_admin', 'property_manager'), ...cloudinaryUpload.single('image'), adminController.createProperty);
 
-// Update property (super admin and property managers, requires OTP) - Single image upload
-router.patch('/properties/:id', authorize('super_admin', 'property_manager'), upload.single('image'), cloudinaryEnhance, adminController.updateProperty);
+// Update property (super admin and property managers, requires OTP) - Single image upload with Cloudinary
+router.patch('/properties/:id', authorize('super_admin', 'property_manager'), ...cloudinaryUpload.single('image'), adminController.updateProperty);
 
 // Delete property (super admin and property managers, requires OTP)
 router.delete('/properties/:id', authorize('super_admin', 'property_manager'), adminController.deleteProperty);
