@@ -40,21 +40,17 @@ function calculateRentalYield(investmentAmount, rentalYieldRate, years = 1) {
  * @param {number} investmentAmount - Original investment amount
  * @param {number} appreciationRate - Annual appreciation percentage
  * @param {number} years - Number of years
- * @param {number} managementFeePercentage - Management fee percentage
  * @returns {object} Appreciation details
  */
-function calculateAppreciation(investmentAmount, appreciationRate, years, managementFeePercentage = 0) {
+function calculateAppreciation(investmentAmount, appreciationRate, years) {
   // Compound appreciation: FV = PV * (1 + r)^n
   const futureValue = investmentAmount * Math.pow(1 + appreciationRate / 100, years);
   const grossAppreciation = futureValue - investmentAmount;
-  const managementFee = (grossAppreciation * managementFeePercentage) / 100;
-  const netAppreciation = grossAppreciation - managementFee;
 
   return {
     futureValue,
     grossAppreciation,
-    managementFee,
-    netAppreciation
+    netAppreciation: grossAppreciation
   };
 }
 
