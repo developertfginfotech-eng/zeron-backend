@@ -24,18 +24,14 @@ function getCurrentInvestmentYear(investmentDate, currentDate = new Date()) {
  * @param {number} investmentAmount - Original investment amount
  * @param {number} rentalYieldRate - Annual rental yield percentage
  * @param {number} years - Number of years
- * @param {number} managementFeePercentage - Management fee percentage
  * @returns {object} Rental yield details
  */
-function calculateRentalYield(investmentAmount, rentalYieldRate, years = 1, managementFeePercentage = 0) {
+function calculateRentalYield(investmentAmount, rentalYieldRate, years = 1) {
   const grossRentalYield = (investmentAmount * rentalYieldRate * years) / 100;
-  const managementFee = (grossRentalYield * managementFeePercentage) / 100;
-  const netRentalYield = grossRentalYield - managementFee;
 
   return {
     grossRentalYield,
-    managementFee,
-    netRentalYield
+    netRentalYield: grossRentalYield
   };
 }
 
