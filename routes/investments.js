@@ -411,7 +411,7 @@ router.put('/settings/:id', authenticate, async (req, res) => {
 // Calculate investment returns
 router.post('/calculate', async (req, res) => {
   try {
-    const { investmentAmount } = req.body;
+    const { investmentAmount, lockingPeriodYears, graduatedPenalties } = req.body;
 
     if (!investmentAmount || investmentAmount <= 0) {
       return res.status(400).json({
@@ -431,7 +431,8 @@ router.post('/calculate', async (req, res) => {
     const amount = parseFloat(investmentAmount);
     const rentalYield = settings.rentalYieldPercentage;
     const appreciation = settings.appreciationRatePercentage;
-    const maturityYears = settings.maturityPeriodYears;
+    // Use provided lockingPeriodYears if available, otherwise fall back to settings
+    const maturityYears = lockingPeriodYears || settings.maturityPeriodYears;
 
     // Calculate rental income (earned during entire locking period)
     const annualRentalIncome = amount * (rentalYield / 100);
@@ -449,8 +450,16 @@ router.post('/calculate', async (req, res) => {
     const returnsAtLocking = totalRentalIncome;
     const valueAtLocking = amount + returnsAtLocking;
 
-    // Calculate early withdrawal penalty
-    const penaltyAmount = amount * (settings.earlyWithdrawalPenaltyPercentage / 100);
+    // Calculate early withdrawal penalty based on graduated penalties or global setting
+    let penaltyPercentage = settings.earlyWithdrawalPenaltyPercentage;
+
+    // If graduated penalties are provided, use the first year penalty (worst case)
+    if (graduatedPenalties && Array.isArray(graduatedPenalties) && graduatedPenalties.length > 0) {
+      const year1Penalty = graduatedPenalties.find(p => p.year === 1);
+      penaltyPercentage = year1Penalty ? year1Penalty.penaltyPercentage : penaltyPercentage;
+    }
+
+    const penaltyAmount = amount * (penaltyPercentage / 100);
     const amountAfterEarlyWithdrawalPenalty = amount - penaltyAmount;
 
     res.json({
@@ -462,7 +471,7 @@ router.post('/calculate', async (req, res) => {
         maturityPeriodYears: maturityYears,
         lockingPeriodYears: maturityYears,
         investmentDurationYears: settings.investmentDurationYears,
-        earlyWithdrawalPenaltyPercentage: settings.earlyWithdrawalPenaltyPercentage
+        earlyWithdrawalPenaltyPercentage: penaltyPercentage
       },
       returns: {
         annualRentalIncome,
@@ -483,7 +492,7 @@ router.post('/calculate', async (req, res) => {
       },
       earlyWithdrawal: {
         lockingPeriodYears: maturityYears,
-        penaltyPercentage: settings.earlyWithdrawalPenaltyPercentage,
+        penaltyPercentage,
         penaltyAmount,
         amountAfterPenalty: amountAfterEarlyWithdrawalPenalty,
         description: `Penalty applied if withdrawn before ${maturityYears} years`
