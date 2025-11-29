@@ -115,11 +115,10 @@ function calculateInvestmentReturns(investment, property, currentDate = new Date
   const rentalYield = calculateRentalYield(
     investmentAmount,
     rentalYieldRate,
-    yearsSinceInvestment,
-    managementFeePercentage
+    yearsSinceInvestment
   );
 
-  let appreciation = { grossAppreciation: 0, managementFee: 0, netAppreciation: 0, futureValue: investmentAmount };
+  let appreciation = { grossAppreciation: 0, netAppreciation: 0, futureValue: investmentAmount };
 
   // Appreciation only applies after lock-in period
   if (!isInLockIn) {
@@ -127,14 +126,15 @@ function calculateInvestmentReturns(investment, property, currentDate = new Date
     appreciation = calculateAppreciation(
       investmentAmount,
       appreciationRate,
-      yearsAfterLockIn,
-      managementFeePercentage
+      yearsAfterLockIn
     );
   }
 
+  // Calculate management fees: percentage of principal per year
+  const totalManagementFees = (investmentAmount * managementFeePercentage * yearsSinceInvestment) / 100;
+
   const totalValue = investmentAmount + rentalYield.netRentalYield + appreciation.netAppreciation;
   const totalReturns = rentalYield.netRentalYield + appreciation.netAppreciation;
-  const totalManagementFees = rentalYield.managementFee + appreciation.managementFee;
 
   return {
     investmentAmount,
@@ -171,12 +171,17 @@ function calculateWithdrawalAmount(investment, property, withdrawalDate = new Da
     penaltyAmount = (returns.totalValue * penaltyInfo.penaltyPercentage) / 100;
   }
 
-  // Management fees are already calculated in returns
-  // Use the totalManagementFees from the returns object which properly deducts fees from rental yield and appreciation
+  // Management fees: percentage of principal per year (only if active)
   const managementFeePercentage = investment.managementFee?.feePercentage || property.managementFees?.percentage || 0;
   const managementFeeIsActive = property.managementFees?.isActive || false;
   const managementFeeDeductionType = property.managementFees?.deductionType || 'upfront';
-  const accumulatedManagementFees = returns.totalManagementFees;
+
+  let accumulatedManagementFees = returns.totalManagementFees;
+
+  // For upfront deduction type, fees are already deducted at investment, so don't deduct again at withdrawal
+  if (managementFeeDeductionType === 'upfront') {
+    accumulatedManagementFees = 0;
+  }
 
   const netWithdrawalAmount = returns.totalValue - penaltyAmount - accumulatedManagementFees;
 
