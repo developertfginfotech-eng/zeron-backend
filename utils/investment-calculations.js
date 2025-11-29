@@ -179,27 +179,12 @@ function calculateWithdrawalAmount(investment, property, withdrawalDate = new Da
     penaltyAmount = (returns.totalValue * penaltyInfo.penaltyPercentage) / 100;
   }
 
-  // Calculate accumulated management fees at withdrawal
+  // Management fees are already calculated in returns
+  // Use the totalManagementFees from the returns object which properly deducts fees from rental yield and appreciation
   const managementFeePercentage = investment.managementFee?.feePercentage || property.managementFees?.percentage || 0;
   const managementFeeIsActive = property.managementFees?.isActive || false;
   const managementFeeDeductionType = property.managementFees?.deductionType || 'upfront';
-
-  let accumulatedManagementFees = 0;
-
-  // Only calculate if management fees are active and deduction type is annual or monthly
-  if (managementFeeIsActive && managementFeePercentage > 0) {
-    const yearsSinceInvestment = returns.yearsSinceInvestment;
-
-    if (managementFeeDeductionType === 'annual') {
-      // Annual fee: percentage of total value per year
-      accumulatedManagementFees = (returns.totalValue * managementFeePercentage * yearsSinceInvestment) / 100;
-    } else if (managementFeeDeductionType === 'monthly') {
-      // Monthly fee: percentage of total value per month
-      const monthsSinceInvestment = yearsSinceInvestment * 12;
-      accumulatedManagementFees = (returns.totalValue * managementFeePercentage * monthsSinceInvestment) / 100;
-    }
-    // Note: 'upfront' fees were already deducted at investment time, so we don't deduct again
-  }
+  const accumulatedManagementFees = returns.totalManagementFees;
 
   const netWithdrawalAmount = returns.totalValue - penaltyAmount - accumulatedManagementFees;
 
