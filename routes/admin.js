@@ -14,9 +14,12 @@ router.get('/properties/:id', adminController.getPropertyById);
 // Get security settings (public - read-only)
 router.get('/security-settings', adminController.getSecuritySettings);
 
-// ========== PUBLIC ADMIN REGISTRATION (NO AUTH REQUIRED) ==========
-// Register new admin (public - for Super Admin to register new admins)
-router.post('/admin-users', [
+// Apply authentication to all admin routes
+router.use(authenticate);
+
+// ========== SUPER ADMIN ONLY - ADMIN CREATION ==========
+// Register new admin (super admin only - creates new admin users)
+router.post('/admin-users', authorize('super_admin'), [
   body('firstName').trim().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
   body('lastName').trim().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
   body('email').isEmail().withMessage('Valid email required'),
@@ -25,9 +28,6 @@ router.post('/admin-users', [
   body('role').optional().isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer']).withMessage('Invalid role'),
   body('position').optional().trim()
 ], adminController.createAdminUser);
-
-// Apply authentication to all remaining admin routes
-router.use(authenticate);
 
 // Base authorization for admin routes (all admin roles can access unless specified)
 router.use(authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'));
