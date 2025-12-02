@@ -3547,7 +3547,22 @@ async createProperty(req, res) {
 
   async getGroups(req, res) {
     try {
-      const groups = await Group.find()
+      const admin = await User.findById(req.user.id);
+      let groupQuery = Group.find();
+
+      // Team leads can only see groups they belong to
+      // Super admins can see all groups
+      if (admin && admin.role !== 'super_admin') {
+        // Get user's group membership
+        const userGroupIds = await Group.find({
+          'members.userId': req.user.id
+        }).select('_id');
+
+        const groupIds = userGroupIds.map(g => g._id);
+        groupQuery = groupQuery.where('_id').in(groupIds);
+      }
+
+      const groups = await groupQuery
         .populate('defaultRole', 'name displayName')
         .populate({
           path: 'members.userId',
@@ -3745,6 +3760,7 @@ async createProperty(req, res) {
 
       const user = await User.findById(userId);
       const group = await Group.findById(groupId);
+      const admin = await User.findById(req.user.id);
 
       if (!user) {
         return res.status(404).json({
@@ -3758,6 +3774,22 @@ async createProperty(req, res) {
           success: false,
           message: 'Group not found'
         });
+      }
+
+      // Team-based access control:
+      // Super admins can add to any group
+      // Non-super admins (team leads) can only add to groups they belong to
+      if (admin && admin.role !== 'super_admin') {
+        const adminIsMemberOfGroup = group.members?.some(m =>
+          m.userId?.toString() === req.user.id.toString()
+        );
+
+        if (!adminIsMemberOfGroup) {
+          return res.status(403).json({
+            success: false,
+            message: 'Team leads can only add members to their own groups. You are not a member of this group.'
+          });
+        }
       }
 
       // Check if user is already in group
@@ -3802,6 +3834,7 @@ async createProperty(req, res) {
 
       const user = await User.findById(userId);
       const group = await Group.findById(groupId);
+      const admin = await User.findById(req.user.id);
 
       if (!user) {
         return res.status(404).json({
@@ -3815,6 +3848,22 @@ async createProperty(req, res) {
           success: false,
           message: 'Group not found'
         });
+      }
+
+      // Team-based access control:
+      // Super admins can remove from any group
+      // Non-super admins (team leads) can only remove from groups they belong to
+      if (admin && admin.role !== 'super_admin') {
+        const adminIsMemberOfGroup = group.members?.some(m =>
+          m.userId?.toString() === req.user.id.toString()
+        );
+
+        if (!adminIsMemberOfGroup) {
+          return res.status(403).json({
+            success: false,
+            message: 'Team leads can only manage members in their own groups. You are not a member of this group.'
+          });
+        }
       }
 
       // Remove user from group
@@ -3843,6 +3892,7 @@ async createProperty(req, res) {
 
       const user = await User.findById(userId);
       const group = await Group.findById(groupId);
+      const admin = await User.findById(req.user.id);
 
       if (!user) {
         return res.status(404).json({
@@ -3856,6 +3906,22 @@ async createProperty(req, res) {
           success: false,
           message: 'Group not found'
         });
+      }
+
+      // Team-based access control:
+      // Super admins can update permissions in any group
+      // Non-super admins (team leads) can only update in groups they belong to
+      if (admin && admin.role !== 'super_admin') {
+        const adminIsMemberOfGroup = group.members?.some(m =>
+          m.userId?.toString() === req.user.id.toString()
+        );
+
+        if (!adminIsMemberOfGroup) {
+          return res.status(403).json({
+            success: false,
+            message: 'Team leads can only manage members in their own groups. You are not a member of this group.'
+          });
+        }
       }
 
       // Find the member in the group
