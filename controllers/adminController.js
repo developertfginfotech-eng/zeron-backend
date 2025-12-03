@@ -4399,5 +4399,202 @@ async createProperty(req, res) {
     }
   }
 
+  async getNotifications(req, res) {
+    try {
+      const { limit = 20, offset = 0, type, status } = req.query;
+      const Notification = require('../models/Notification');
+
+      const query = {};
+      if (type) query.type = type;
+      if (status) query.status = status;
+
+      // Get notifications for current admin user or system notifications
+      const notifications = await Notification.find({
+        ...query,
+        $or: [
+          { user: req.user.id },
+          { type: { $in: ['system_announcement', 'app_update', 'policy_change'] } }
+        ]
+      })
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip(parseInt(offset))
+        .populate('user', 'firstName lastName email');
+
+      // Get counts for summary
+      const totalCount = await Notification.countDocuments({
+        $or: [
+          { user: req.user.id },
+          { type: { $in: ['system_announcement', 'app_update', 'policy_change'] } }
+        ]
+      });
+
+      const unreadCount = await Notification.countDocuments({
+        isRead: false,
+        $or: [
+          { user: req.user.id },
+          { type: { $in: ['system_announcement', 'app_update', 'policy_change'] } }
+        ]
+      });
+
+      const errorCount = await Notification.countDocuments({
+        type: 'account_security',
+        $or: [
+          { user: req.user.id },
+          { type: { $in: ['system_announcement', 'app_update', 'policy_change'] } }
+        ]
+      });
+
+      const warningCount = await Notification.countDocuments({
+        priority: { $in: ['high', 'urgent'] },
+        $or: [
+          { user: req.user.id },
+          { type: { $in: ['system_announcement', 'app_update', 'policy_change'] } }
+        ]
+      });
+
+      res.json({
+        success: true,
+        data: notifications.map(notif => ({
+          id: notif._id,
+          title: notif.title,
+          message: notif.message,
+          type: notif.type,
+          priority: notif.priority,
+          isRead: notif.isRead,
+          createdAt: notif.createdAt,
+          status: notif.status
+        })),
+        summary: {
+          total: totalCount,
+          unread: unreadCount,
+          errors: errorCount,
+          warnings: warningCount
+        }
+      });
+    } catch (error) {
+      logger.error('Get notifications error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching notifications',
+        error: error.message
+      });
+    }
+  }
+
+  async markNotificationAsRead(req, res) {
+    try {
+      const { id } = req.params;
+      const Notification = require('../models/Notification');
+      const mongoose = require('mongoose');
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid notification ID'
+        });
+      }
+
+      const notification = await Notification.findById(id);
+      if (!notification) {
+        return res.status(404).json({
+          success: false,
+          message: 'Notification not found'
+        });
+      }
+
+      await notification.markAsRead();
+
+      res.json({
+        success: true,
+        message: 'Notification marked as read',
+        data: notification
+      });
+    } catch (error) {
+      logger.error('Mark notification as read error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error marking notification as read',
+        error: error.message
+      });
+    }
+  }
+
+  async markAllNotificationsAsRead(req, res) {
+    try {
+      const Notification = require('../models/Notification');
+
+      const result = await Notification.markAllAsReadForUser(req.user.id);
+
+      res.json({
+        success: true,
+        message: 'All notifications marked as read',
+        data: result
+      });
+    } catch (error) {
+      logger.error('Mark all notifications as read error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error marking all notifications as read',
+        error: error.message
+      });
+    }
+  }
+
+  async createNotification(req, res) {
+    try {
+      const { title, message, type = 'general', priority = 'normal', targetUsers = [] } = req.body;
+      const Notification = require('../models/Notification');
+      const User = require('../models/User');
+
+      if (!title || !message) {
+        return res.status(400).json({
+          success: false,
+          message: 'Title and message are required'
+        });
+      }
+
+      let users = [];
+      if (targetUsers.length > 0) {
+        users = targetUsers;
+      } else {
+        // If no specific users, create for all admin users
+        const adminUsers = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
+        users = adminUsers.map(u => u._id);
+      }
+
+      const createdNotifications = [];
+      for (const userId of users) {
+        const notification = new Notification({
+          user: userId,
+          title,
+          message,
+          type,
+          priority
+        });
+        await notification.save();
+        createdNotifications.push(notification);
+      }
+
+      logger.info(`Admin created notification - Type: ${type}, Recipients: ${users.length}`);
+
+      res.status(201).json({
+        success: true,
+        message: 'Notification sent successfully',
+        data: {
+          count: createdNotifications.length,
+          notifications: createdNotifications
+        }
+      });
+    } catch (error) {
+      logger.error('Create notification error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating notification',
+        error: error.message
+      });
+    }
+  }
+
 }
 module.exports = new AdminController();
