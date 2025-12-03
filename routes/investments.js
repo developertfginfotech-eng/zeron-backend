@@ -79,7 +79,7 @@ router.get('/my-investments', authenticate, async (req, res) => {
 // Calculate investment returns (MUST be before POST / to avoid route conflicts)
 router.post('/calculate', async (req, res) => {
   try {
-    const { investmentAmount, lockingPeriodYears, graduatedPenalties } = req.body;
+    const { investmentAmount, propertyId, lockingPeriodYears, graduatedPenalties } = req.body;
 
     if (!investmentAmount || investmentAmount <= 0) {
       return res.status(400).json({
@@ -88,18 +88,39 @@ router.post('/calculate', async (req, res) => {
       });
     }
 
-    const settings = await InvestmentSettings.getActiveSettings();
-    if (!settings) {
-      return res.status(400).json({
-        success: false,
-        message: 'No active investment settings found'
-      });
+    // Get global default settings
+    const globalSettings = await InvestmentSettings.getActiveSettings();
+    const defaultSettings = {
+      rentalYieldPercentage: 8,
+      appreciationRatePercentage: 3,
+      earlyWithdrawalPenaltyPercentage: 5,
+      maturityPeriodYears: 5
+    };
+    const settings = globalSettings || defaultSettings;
+
+    // If propertyId provided, fetch property-specific investment terms
+    let propertyTerms = null;
+    if (propertyId) {
+      const property = await Property.findById(propertyId).select('investmentTerms');
+      propertyTerms = property?.investmentTerms || null;
     }
 
     const amount = parseFloat(investmentAmount);
-    const rentalYield = settings.rentalYieldPercentage;
-    const appreciation = settings.appreciationRatePercentage;
-    const maturityYears = lockingPeriodYears || settings.maturityPeriodYears;
+
+    // Use property-specific settings if available, otherwise use global settings
+    const rentalYield = propertyTerms?.rentalYieldRate !== null && propertyTerms?.rentalYieldRate !== undefined
+      ? propertyTerms.rentalYieldRate
+      : settings.rentalYieldPercentage;
+
+    const appreciation = propertyTerms?.appreciationRate !== null && propertyTerms?.appreciationRate !== undefined
+      ? propertyTerms.appreciationRate
+      : settings.appreciationRatePercentage;
+
+    const penalty = propertyTerms?.earlyWithdrawalPenaltyPercentage !== null && propertyTerms?.earlyWithdrawalPenaltyPercentage !== undefined
+      ? propertyTerms.earlyWithdrawalPenaltyPercentage
+      : settings.earlyWithdrawalPenaltyPercentage;
+
+    const maturityYears = lockingPeriodYears || propertyTerms?.lockingPeriodYears || propertyTerms?.bondMaturityYears || settings.maturityPeriodYears;
 
     const annualRentalIncome = amount * (rentalYield / 100);
     const totalRentalIncome = annualRentalIncome * maturityYears;
@@ -113,7 +134,7 @@ router.post('/calculate', async (req, res) => {
     const returnsAtLocking = totalRentalIncome;
     const valueAtLocking = amount + returnsAtLocking;
 
-    let penaltyPercentage = settings.earlyWithdrawalPenaltyPercentage;
+    let penaltyPercentage = penalty;  // Use property-specific or global penalty
 
     if (graduatedPenalties && Array.isArray(graduatedPenalties) && graduatedPenalties.length > 0) {
       const year1Penalty = graduatedPenalties.find(p => p.year === 1);
