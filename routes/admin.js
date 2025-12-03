@@ -235,4 +235,24 @@ router.post('/rbac/initialize', authorize('super_admin'), adminController.initia
 // Update security settings (super admin only)
 router.put('/security-settings', authorize('super_admin'), adminController.updateSecuritySettings);
 
+// ========== NOTIFICATIONS ROUTES ==========
+
+// Get all notifications for current admin
+router.get('/notifications', adminController.getNotifications);
+
+// Mark specific notification as read
+router.put('/notifications/:id/read', adminController.markNotificationAsRead);
+
+// Mark all notifications as read for current user
+router.put('/notifications/mark-all-read', adminController.markAllNotificationsAsRead);
+
+// Create and send notification to users
+router.post('/notifications', authorize('super_admin'), [
+  body('title').trim().isLength({ min: 3 }).withMessage('Title must be at least 3 characters'),
+  body('message').trim().isLength({ min: 10 }).withMessage('Message must be at least 10 characters'),
+  body('type').optional().isIn(['info', 'success', 'warning', 'error', 'system_announcement', 'app_update', 'policy_change']).withMessage('Invalid notification type'),
+  body('priority').optional().isIn(['low', 'normal', 'high', 'urgent']).withMessage('Invalid priority level'),
+  body('targetUsers').optional().isArray().withMessage('Target users must be an array')
+], adminController.createNotification);
+
 module.exports = router;
