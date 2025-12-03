@@ -2723,7 +2723,7 @@ async createProperty(req, res) {
       // Execute the query
       const investors = await Investment.aggregate(pipeline);
 
-      // Calculate summary statistics
+      // Calculate summary statistics (including unrealized returns)
       const summaryPipeline = [
         {
           $match: {
@@ -2735,7 +2735,26 @@ async createProperty(req, res) {
             _id: null,
             totalInvestors: { $addToSet: "$user" },
             totalInvestmentAmount: { $sum: "$amount" },
-            totalReturnsDistributed: { $sum: "$returns.totalReturnsReceived" },
+            totalReturnsDistributed: { $sum: { $ifNull: ["$returns.totalReturnsReceived", 0] } },
+            // Calculate total returns (realized + unrealized)
+            totalReturns: {
+              $sum: {
+                $add: [
+                  { $ifNull: ["$returns.totalReturnsReceived", 0] },
+                  {
+                    $multiply: [
+                      "$amount",
+                      {
+                        $add: [
+                          { $divide: [{ $ifNull: ["$rentalYieldRate", 0] }, 100] },
+                          { $divide: [{ $ifNull: ["$appreciationRate", 0] }, 100] }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
             averageInvestment: { $avg: "$amount" }
           }
         },
