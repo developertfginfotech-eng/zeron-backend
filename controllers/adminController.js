@@ -3183,7 +3183,7 @@ async createProperty(req, res) {
         }
       ]);
 
-      // Get KYC stats
+      // Get KYC stats - formatted as array
       const kycStats = await User.aggregate([
         {
           $group: {
@@ -3193,8 +3193,103 @@ async createProperty(req, res) {
         }
       ]);
 
+      const kycStatsArray = kycStats.map(stat => ({
+        name: stat._id || 'Unknown',
+        value: stat.count,
+        percentage: 0 // Will calculate below
+      }));
+
+      // Calculate KYC percentages
+      const totalKycUsers = kycStatsArray.reduce((sum, stat) => sum + stat.value, 0);
+      kycStatsArray.forEach(stat => {
+        stat.percentage = totalKycUsers > 0 ? Math.round((stat.value / totalKycUsers) * 100) : 0;
+      });
+
+      // Get property type performance (investment distribution by property type)
+      const propertyPerformance = await Property.aggregate([
+        {
+          $lookup: {
+            from: 'investments',
+            localField: '_id',
+            foreignField: 'property',
+            as: 'investments'
+          }
+        },
+        {
+          $group: {
+            _id: '$type',
+            count: { $sum: 1 },
+            totalInvested: { $sum: { $size: '$investments' } }
+          }
+        }
+      ]);
+
+      const propertyPerformanceArray = propertyPerformance.map(prop => ({
+        name: prop._id || 'Unknown',
+        value: prop.count > 0 ? Math.round((prop.totalInvested / (totalProperties || 1)) * 100) : 0,
+        count: prop.count
+      }));
+
+      // Calculate average return percentage from investments
+      const avgReturnPercentage = await Investment.aggregate([
+        {
+          $match: {
+            status: 'confirmed',
+            createdAt: { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            avgRentalYield: { $avg: '$rentalYieldRate' },
+            avgAppreciation: { $avg: '$appreciationRate' }
+          }
+        }
+      ]);
+
+      const averageROI = avgReturnPercentage[0]
+        ? ((avgReturnPercentage[0].avgRentalYield || 0) + (avgReturnPercentage[0].avgAppreciation || 0)) / 2
+        : 9.8;
+
       // Calculate projections
-      const projectedReturns = (totalInvestmentValue[0]?.total || 0) * 0.098; // 9.8% average return
+      const projectedReturns = (totalInvestmentValue[0]?.total || 0) * (averageROI / 100);
+
+      // Get investment vs withdrawal trends (weekly)
+      const investmentTrends = await Transaction.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: start, $lte: end },
+            status: 'completed',
+            type: { $in: ['investment', 'withdrawal', 'payout'] }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$createdAt' },
+              week: { $week: '$createdAt' }
+            },
+            investmentAmount: {
+              $sum: {
+                $cond: [{ $eq: ['$type', 'investment'] }, '$amount', 0]
+              }
+            },
+            withdrawalAmount: {
+              $sum: {
+                $cond: [{ $in: ['$type', ['withdrawal', 'payout']] }, '$amount', 0]
+              }
+            }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.week': 1 } },
+        { $limit: 13 } // Last 13 weeks
+      ]);
+
+      const investmentTrendsArray = investmentTrends.map((trend, index) => ({
+        name: `Week ${index + 1}`,
+        investment: trend.investmentAmount,
+        withdrawal: trend.withdrawalAmount
+      }));
 
       res.json({
         success: true,
@@ -3204,27 +3299,26 @@ async createProperty(req, res) {
             totalUsers,
             activeUsers,
             totalProperties,
-            projectedReturns,
-            averageReturnPercentage: 9.8
+            projectedReturns: Math.round(projectedReturns),
+            averageReturnPercentage: parseFloat(averageROI.toFixed(1))
           },
-          monthlyRevenue: revenueData.map(d => ({
-            month: new Date(d._id.year, d._id.month - 1).toLocaleDateString('en-US', { month: 'short' }),
+          monthlyRevenue: revenueData.length > 0 ? revenueData.map(d => ({
+            name: new Date(d._id.year, d._id.month - 1).toLocaleDateString('en-US', { month: 'short' }),
             value: d.revenue,
             count: d.count
-          })),
-          userGrowth: userGrowthData.map(d => ({
-            month: new Date(d._id.year, d._id.month - 1).toLocaleDateString('en-US', { month: 'short' }),
+          })) : [],
+          userGrowth: userGrowthData.length > 0 ? userGrowthData.map(d => ({
+            name: new Date(d._id.year, d._id.month - 1).toLocaleDateString('en-US', { month: 'short' }),
             value: d.newUsers
-          })),
+          })) : [],
           investmentStats: {
             totalInvested: investments[0]?.totalInvested || 0,
             investmentCount: investments[0]?.count || 0,
             averageInvestment: investments[0]?.avgAmount || 0
           },
-          kycStats: kycStats.reduce((acc, stat) => {
-            acc[stat._id || 'unknown'] = stat.count;
-            return acc;
-          }, {}),
+          kycStats: kycStatsArray,
+          propertyPerformance: propertyPerformanceArray,
+          investmentTrends: investmentTrendsArray,
           dateRange: {
             start,
             end
