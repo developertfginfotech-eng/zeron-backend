@@ -2641,7 +2641,27 @@ async createProperty(req, res) {
             _id: "$investor._id",
             investor: { $first: "$investor" },
             totalInvestments: { $sum: "$amount" },
-            totalReturns: { $sum: "$returns.totalReturnsReceived" },
+            // Include both realized (totalReturnsReceived) and unrealized (rentalYieldRate, appreciationRate) returns
+            totalReturns: {
+              $sum: {
+                $add: [
+                  { $ifNull: ["$returns.totalReturnsReceived", 0] },  // Distributed returns
+                  {
+                    // Estimate unrealized returns from investment parameters
+                    $multiply: [
+                      "$amount",
+                      {
+                        $add: [
+                          { $divide: [{ $ifNull: ["$rentalYieldRate", 0] }, 100] },
+                          { $divide: [{ $ifNull: ["$appreciationRate", 0] }, 100] }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            realizedReturns: { $sum: { $ifNull: ["$returns.totalReturnsReceived", 0] } },  // Track realized separately
             investmentCount: { $sum: 1 },
             properties: {
               $push: {
@@ -2649,7 +2669,9 @@ async createProperty(req, res) {
                 propertyTitle: "$propertyDetails.title",
                 amount: "$amount",
                 date: "$createdAt",
-                returns: "$returns.totalReturnsReceived"
+                returns: "$returns.totalReturnsReceived",
+                rentalYieldRate: { $ifNull: ["$rentalYieldRate", 0] },
+                appreciationRate: { $ifNull: ["$appreciationRate", 0] }
               }
             },
             firstInvestment: { $min: "$createdAt" },
@@ -2660,6 +2682,10 @@ async createProperty(req, res) {
           $addFields: {
             "investor.fullName": {
               $concat: ["$investor.firstName", " ", "$investor.lastName"]
+            },
+            // Calculate unrealized gains
+            unrealizedReturns: {
+              $subtract: ["$totalReturns", "$realizedReturns"]
             }
           }
         }
