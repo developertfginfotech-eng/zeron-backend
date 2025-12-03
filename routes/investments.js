@@ -76,6 +76,96 @@ router.get('/my-investments', authenticate, async (req, res) => {
   }
 });
 
+// Calculate investment returns (MUST be before POST / to avoid route conflicts)
+router.post('/calculate', async (req, res) => {
+  try {
+    const { investmentAmount, lockingPeriodYears, graduatedPenalties } = req.body;
+
+    if (!investmentAmount || investmentAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid investment amount is required'
+      });
+    }
+
+    const settings = await InvestmentSettings.getActiveSettings();
+    if (!settings) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active investment settings found'
+      });
+    }
+
+    const amount = parseFloat(investmentAmount);
+    const rentalYield = settings.rentalYieldPercentage;
+    const appreciation = settings.appreciationRatePercentage;
+    const maturityYears = lockingPeriodYears || settings.maturityPeriodYears;
+
+    const annualRentalIncome = amount * (rentalYield / 100);
+    const totalRentalIncome = annualRentalIncome * maturityYears;
+
+    const finalValue = amount * Math.pow(1 + appreciation / 100, maturityYears);
+    const appreciationGain = finalValue - amount;
+
+    const totalReturnsAtMaturity = totalRentalIncome + appreciationGain;
+    const totalValueAtMaturity = amount + totalReturnsAtMaturity;
+
+    const returnsAtLocking = totalRentalIncome;
+    const valueAtLocking = amount + returnsAtLocking;
+
+    let penaltyPercentage = settings.earlyWithdrawalPenaltyPercentage;
+
+    if (graduatedPenalties && Array.isArray(graduatedPenalties) && graduatedPenalties.length > 0) {
+      const year1Penalty = graduatedPenalties.find(p => p.year === 1);
+      penaltyPercentage = year1Penalty ? year1Penalty.penaltyPercentage : penaltyPercentage;
+    }
+
+    const penaltyAmount = amount * (penaltyPercentage / 100);
+    const amountAfterEarlyWithdrawalPenalty = amount - penaltyAmount;
+
+    res.json({
+      success: true,
+      investmentAmount: amount,
+      settings: {
+        rentalYieldPercentage: rentalYield,
+        appreciationRatePercentage: appreciation,
+        maturityPeriodYears: maturityYears,
+        lockingPeriodYears: maturityYears,
+        investmentDurationYears: settings.investmentDurationYears,
+        earlyWithdrawalPenaltyPercentage: penaltyPercentage
+      },
+      returns: {
+        annualRentalIncome,
+        lockingPeriod: {
+          rentalYield: totalRentalIncome,
+          projectedValue: valueAtLocking,
+          description: `After ${maturityYears} years (locking period)`
+        },
+        atMaturity: {
+          rentalYield: totalRentalIncome,
+          appreciation: appreciationGain,
+          totalReturns: totalReturnsAtMaturity,
+          projectedValue: totalValueAtMaturity,
+          description: `At maturity after ${maturityYears} years`
+        }
+      },
+      earlyWithdrawal: {
+        lockingPeriodYears: maturityYears,
+        penaltyPercentage,
+        penaltyAmount,
+        amountAfterPenalty: amountAfterEarlyWithdrawalPenalty,
+        description: `Penalty applied if withdrawn before ${maturityYears} years`
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to calculate investment returns',
+      error: error.message
+    });
+  }
+});
+
 // Create investment (POST /api/investments)
 router.post('/',
   authenticate,
