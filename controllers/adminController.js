@@ -2553,6 +2553,90 @@ async createProperty(req, res) {
         ? ((projectedTotalReturns / totalInvestmentValue) * 100).toFixed(2)
         : 0;
 
+      // Get monthly investment data for the last 7 months
+      const monthlyInvestmentsPipeline = [
+        {
+          $match: {
+            status: "confirmed",
+            createdAt: {
+              $gte: new Date(new Date().setMonth(new Date().getMonth() - 7))
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: "$createdAt" },
+              month: { $month: "$createdAt" }
+            },
+            total: { $sum: "$amount" },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { "_id.year": 1, "_id.month": 1 } }
+      ];
+
+      const monthlyData = await Investment.aggregate(monthlyInvestmentsPipeline);
+
+      // Format monthly investments data
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const monthlyInvestments = [];
+
+      // Get last 7 months
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const month = date.getMonth() + 1;
+        const year = date.getFullYear();
+        const monthName = monthNames[month - 1];
+
+        const monthData = monthlyData.find(d => d._id.year === year && d._id.month === month);
+        monthlyInvestments.push({
+          name: monthName,
+          value: monthData ? monthData.total : 0
+        });
+      }
+
+      // Get user growth data for the last 7 months
+      const userGrowthPipeline = [
+        {
+          $match: {
+            status: "active",
+            createdAt: {
+              $gte: new Date(new Date().setMonth(new Date().getMonth() - 7))
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: "$createdAt" },
+              month: { $month: "$createdAt" }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { "_id.year": 1, "_id.month": 1 } }
+      ];
+
+      const userGrowthData = await User.aggregate(userGrowthPipeline);
+
+      // Format user growth data
+      const userGrowth = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const month = date.getMonth() + 1;
+        const year = date.getFullYear();
+        const monthName = monthNames[month - 1];
+
+        const userData = userGrowthData.find(d => d._id.year === year && d._id.month === month);
+        userGrowth.push({
+          name: monthName,
+          value: userData ? userData.count : 0
+        });
+      }
+
       res.json({
         success: true,
         data: {
@@ -2567,6 +2651,8 @@ async createProperty(req, res) {
             projectedReturns: Math.round(projectedTotalReturns),
             averageReturnPercentage: parseFloat(averageReturnPercentage),
           },
+          monthlyInvestments,
+          userGrowth,
         },
       });
     } catch (error) {
