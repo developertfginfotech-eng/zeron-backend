@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'],
+    enum: ['user', 'admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer', 'team_lead', 'team_member'],
     default: 'user'
   },
   // Enhanced RBAC system
