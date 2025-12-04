@@ -25,7 +25,7 @@ router.post('/admin-users', authorize('super_admin'), [
   body('email').isEmail().withMessage('Valid email required'),
   body('phone').matches(/^(\+966|966|0)?[5-9]\d{8}$/).withMessage('Valid Saudi phone number required'),
   body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
-  body('role').optional().isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer']).withMessage('Invalid role'),
+  body('role').optional().isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer', 'team_lead', 'team_member']).withMessage('Invalid role'),
   body('position').optional().trim()
 ], adminController.createAdminUser);
 
