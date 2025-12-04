@@ -753,7 +753,7 @@ class AdminController {
         return res.status(403).json({ success: false, message: "Only super administrators can change roles" });
       }
 
-      const validRoles = ["admin", "super_admin", "kyc_officer", "property_manager", "financial_analyst", "compliance_officer"];
+      const validRoles = ["admin", "super_admin", "kyc_officer", "property_manager", "financial_analyst", "compliance_officer", "team_lead", "team_member"];
       if (!validRoles.includes(role)) {
         return res.status(400).json({ success: false, message: "Invalid role specified" });
       }
