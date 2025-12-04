@@ -314,7 +314,7 @@ class AdminController {
       const { page = 1, limit = 20, sort = "-createdAt", role, search } = req.query;
 
       const filter = {
-        role: { $in: ["admin", "super_admin", "kyc_officer", "property_manager", "financial_analyst", "compliance_officer"] }
+        role: { $in: ["admin", "super_admin", "kyc_officer", "property_manager", "financial_analyst", "compliance_officer", "team_lead", "team_member"] }
       };
 
       if (role) filter.role = role;
