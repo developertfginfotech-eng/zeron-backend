@@ -802,6 +802,44 @@ class AdminController {
     }
   }
 
+  async deleteAdminUser(req, res) {
+    try {
+      const { id } = req.params;
+      const currentUserId = req.user.id;
+
+      if (req.user.role !== "super_admin") {
+        return res.status(403).json({ success: false, message: "Only super administrators can delete admin users" });
+      }
+
+      // Prevent deleting yourself
+      if (currentUserId === id) {
+        return res.status(400).json({ success: false, message: "Cannot delete your own admin account" });
+      }
+
+      const targetUser = await User.findById(id);
+      if (!targetUser) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Prevent deleting super admins
+      if (targetUser.role === "super_admin") {
+        return res.status(403).json({ success: false, message: "Cannot delete super admin users" });
+      }
+
+      // Delete the user
+      await User.findByIdAndDelete(id);
+
+      res.json({
+        success: true,
+        message: `Admin user ${targetUser.firstName} ${targetUser.lastName} has been deleted successfully`,
+        data: { deletedUserId: targetUser._id }
+      });
+    } catch (error) {
+      logger.error("Delete admin user error:", error);
+      res.status(500).json({ success: false, message: "Error deleting admin user" });
+    }
+  }
+
   // Get eligible users for promotion
   async getEligibleUsers(req, res) {
     try {

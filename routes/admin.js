@@ -72,6 +72,9 @@ router.put('/admin-users/:id/role', authorize('super_admin'), [
   body('role').isIn(['admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer']).withMessage('Invalid role')
 ], adminController.updateAdminRole);
 
+// Delete admin user (super admin only)
+router.delete('/admin-users/:id', authorize('super_admin'), adminController.deleteAdminUser);
+
 // ========== USER PROMOTION ROUTES ==========
 
 // Get eligible users for promotion to admin (super admin only)
