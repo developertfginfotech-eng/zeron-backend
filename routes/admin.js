@@ -69,7 +69,7 @@ router.put('/admin-users/:id/promote-super-admin', authorize('super_admin'), adm
 
 // Update admin user role (super admin only, requires OTP)
 router.put('/admin-users/:id/role', authorize('super_admin'), [
-  body('role').isIn(['admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer']).withMessage('Invalid role')
+  body('role').isIn(['admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer', 'team_lead', 'team_member']).withMessage('Invalid role')
 ], adminController.updateAdminRole);
 
 // Delete admin user (super admin only)
