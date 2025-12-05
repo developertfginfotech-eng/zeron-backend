@@ -223,7 +223,68 @@ const groupSchema = new mongoose.Schema({
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  }
+  },
+  // Parent group reference for sub-groups
+  parentGroupId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Group',
+    default: null
+  },
+  // Overridden permissions for sub-groups (inherits parent if not specified)
+  overriddenPermissions: [{
+    resource: {
+      type: String,
+      enum: [
+        'kyc',
+        'kyc:verification',
+        'kyc:approval',
+        'kyc:documents',
+        'finance',
+        'finance:reports',
+        'finance:investments',
+        'finance:payouts',
+        'finance:audits',
+        'compliance',
+        'compliance:monitoring',
+        'compliance:reports',
+        'compliance:approvals',
+        'compliance:policies',
+        'operations',
+        'operations:properties',
+        'operations:transactions',
+        'operations:support',
+        'operations:maintenance',
+        'properties',
+        'properties:create',
+        'properties:edit',
+        'properties:delete',
+        'properties:view',
+        'investments',
+        'investments:create',
+        'investments:view',
+        'investments:edit',
+        'transactions',
+        'transactions:view',
+        'transactions:manage',
+        'kyc-documents',
+        'kyc-documents:upload',
+        'kyc-documents:view',
+        'kyc-documents:reject',
+        'notifications',
+        'settings',
+        'admin',
+        'admin:users',
+        'admin:roles',
+        'admin:groups',
+        'admin:security',
+        'admin:logs'
+      ]
+    },
+    actions: [{
+      type: String,
+      enum: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'manage', 'export', 'verify', 'archive']
+    }]
+  }]
 }, {
   timestamps: true
 });

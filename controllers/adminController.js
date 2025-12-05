@@ -3922,7 +3922,7 @@ async createProperty(req, res) {
         });
       }
 
-      const { name, displayName, description, department, permissions, defaultRole } = req.body;
+      const { name, displayName, description, department, permissions, defaultRole, parentGroupId, overriddenPermissions } = req.body;
 
       // Check if group with this name already exists
       const existingGroup = await Group.findOne({ name: name.toLowerCase().replace(/\s+/g, '_') });
@@ -3934,6 +3934,17 @@ async createProperty(req, res) {
         });
       }
 
+      // If parentGroupId is provided, verify parent group exists
+      if (parentGroupId) {
+        const parentGroup = await Group.findById(parentGroupId);
+        if (!parentGroup) {
+          return res.status(404).json({
+            success: false,
+            message: 'Parent group not found'
+          });
+        }
+      }
+
       const group = await Group.create({
         name: name.toLowerCase().replace(/\s+/g, '_'),
         displayName,
@@ -3941,7 +3952,9 @@ async createProperty(req, res) {
         department: department || 'other',
         permissions,
         defaultRole: defaultRole || null,
-        createdBy: req.user.id
+        createdBy: req.user.id,
+        parentGroupId: parentGroupId || null,
+        overriddenPermissions: overriddenPermissions || []
       });
 
       logger.info(`Admin created group - Admin: ${req.user.id}, Group: ${group.name}`);
