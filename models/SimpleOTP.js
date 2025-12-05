@@ -10,7 +10,7 @@ const simpleOTPSchema = new mongoose.Schema({
   operation: {
     type: String,
     required: true,
-    enum: ['create', 'update', 'delete']
+    enum: ['create', 'update', 'delete', 'update_role', 'deactivate_admin', 'promote_super_admin', 'promote_to_admin']
   },
   propertyData: {
     type: mongoose.Schema.Types.Mixed,

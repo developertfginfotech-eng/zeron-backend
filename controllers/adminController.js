@@ -764,41 +764,61 @@ class AdminController {
       }
 
       if (!otp) {
-        const currentUser = await User.findById(currentUserId);
-        const emailResult = await otpEmailService.sendOTP({
-          operation: "update_role",
-          propertyData: { title: `Change ${targetUser.firstName} ${targetUser.lastName} role to ${role}` },
-          adminUser: currentUser,
-          propertyId: id
-        });
+        try {
+          const currentUser = await User.findById(currentUserId);
+          if (!currentUser) {
+            return res.status(404).json({ success: false, message: "Current user not found" });
+          }
 
-        return res.status(200).json({
+          const emailResult = await otpEmailService.sendOTP({
+            operation: "update_role",
+            propertyData: { title: `Change ${targetUser.firstName} ${targetUser.lastName} role to ${role}` },
+            adminUser: currentUser,
+            propertyId: id
+          });
+
+          return res.status(200).json({
+            success: true,
+            message: "OTP sent successfully",
+            data: { step: "otp_required", sentTo: emailResult?.sentTo || "console log", otpId: emailResult?.otpId }
+          });
+        } catch (otpError) {
+          console.error("OTP Service Error:", otpError);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to send OTP: " + (otpError.message || "Unknown error")
+          });
+        }
+      }
+
+      try {
+        const verification = await otpEmailService.verifyOTP(currentUserId, otp, "update_role");
+        if (!verification.valid) {
+          return res.status(400).json({
+            success: false,
+            message: verification.reason || "Invalid OTP",
+            attemptsRemaining: verification.attemptsRemaining
+          });
+        }
+
+        targetUser.role = role;
+        await targetUser.save();
+
+        res.json({
           success: true,
-          message: "OTP sent successfully",
-          data: { step: "otp_required", sentTo: emailResult.sentTo, otpId: emailResult.otpId }
+          message: `User role updated to ${role} successfully`,
+          data: { user: { id: targetUser._id, role: targetUser.role } }
         });
-      }
-
-      const verification = await otpEmailService.verifyOTP(currentUserId, otp, "update_role");
-      if (!verification.valid) {
-        return res.status(400).json({
+      } catch (verifyError) {
+        console.error("OTP Verification Error:", verifyError);
+        return res.status(500).json({
           success: false,
-          message: verification.reason,
-          attemptsRemaining: verification.attemptsRemaining
+          message: "OTP verification failed: " + (verifyError.message || "Unknown error")
         });
       }
-
-      targetUser.role = role;
-      await targetUser.save();
-
-      res.json({
-        success: true,
-        message: `User role updated to ${role} successfully`,
-        data: { user: { id: targetUser._id, role: targetUser.role } }
-      });
     } catch (error) {
-      logger.error("Update admin role error:", error);
-      res.status(500).json({ success: false, message: "Error updating role" });
+      console.error("Update admin role error:", error);
+      res.status(500).json({ success: false, message: "Error updating role: " + (error.message || "Unknown error") });
     }
   }
 
