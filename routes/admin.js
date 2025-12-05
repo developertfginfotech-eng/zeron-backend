@@ -197,7 +197,9 @@ router.post('/groups', authorize('admin', 'super_admin', 'kyc_officer', 'propert
   body('description').optional().trim(),
   body('department').optional().trim(),
   body('permissions').isArray().withMessage('Permissions must be an array'),
-  body('defaultRole').optional().isMongoId().withMessage('Valid role ID required')
+  body('defaultRole').optional().isMongoId().withMessage('Valid role ID required'),
+  body('parentGroupId').optional().isMongoId().withMessage('Valid parent group ID required'),
+  body('overriddenPermissions').optional().isArray().withMessage('Overridden permissions must be an array')
 ], adminController.createGroup);
 
 // Update group
