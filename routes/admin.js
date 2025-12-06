@@ -6,11 +6,31 @@ const { checkPermission, requireSuperAdmin } = require('../middleware/permission
 const cloudinaryUpload = require('../middleware/cloudinary-upload');
 const { body, query } = require('express-validator');
 
-// Public property browsing - no authentication required
-router.get('/properties', adminController.getProperties);
+// Get all properties - requires properties view permission or super admin
+router.get('/properties', (req, res, next) => {
+  // If no authentication, treat as public listing
+  if (!req.user) {
+    return adminController.getProperties(req, res);
+  }
+  // If authenticated but not super admin, check permissions
+  if (req.user?.role !== 'super_admin') {
+    return checkPermission('properties', 'view')(req, res, next);
+  }
+  next();
+}, adminController.getProperties);
 
-// Get specific property (public)
-router.get('/properties/:id', adminController.getPropertyById);
+// Get specific property - requires properties view permission or super admin
+router.get('/properties/:id', (req, res, next) => {
+  // If no authentication, treat as public listing
+  if (!req.user) {
+    return adminController.getPropertyById(req, res);
+  }
+  // If authenticated but not super admin, check permissions
+  if (req.user?.role !== 'super_admin') {
+    return checkPermission('properties', 'view')(req, res, next);
+  }
+  next();
+}, adminController.getPropertyById);
 
 // Get security settings (public - read-only)
 router.get('/security-settings', adminController.getSecuritySettings);
