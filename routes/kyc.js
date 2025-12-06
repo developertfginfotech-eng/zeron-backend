@@ -9,12 +9,12 @@ const router = express.Router();
 // Middleware to check KYC view permission (group-based)
 const checkKYCViewPermission = async (req, res, next) => {
   try {
-    // Super admin and KYC roles get automatic access
-    if (['admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'].includes(req.user.role)) {
+    // Super admin gets automatic access
+    if (req.user?.role === 'super_admin') {
       return next();
     }
 
-    // For other roles, check if user has kyc:documents permission in their groups
+    // For all other roles, check if user has kyc:documents permission in their groups
     const user = await User.findById(req.user.id).populate('groups');
 
     if (!user) {
@@ -46,12 +46,12 @@ const checkKYCViewPermission = async (req, res, next) => {
 // Middleware to check KYC approval permission (group-based)
 const checkKYCApprovalPermission = async (req, res, next) => {
   try {
-    // Super admin and KYC officer get automatic access
-    if (['admin', 'super_admin', 'kyc_officer'].includes(req.user.role)) {
+    // Super admin gets automatic access
+    if (req.user?.role === 'super_admin') {
       return next();
     }
 
-    // For other roles, check if user has kyc:approval permission in their groups
+    // For all other roles, check if user has kyc:approval permission in their groups
     const user = await User.findById(req.user.id).populate('groups');
 
     if (!user) {
