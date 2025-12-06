@@ -313,31 +313,151 @@ router.delete('/groups/:id', (req, res, next) => {
   return checkPermission('admin', 'manage')(req, res, next);
 }, adminController.deleteGroup);
 
-// Add user to group - requires admin manage permission or super admin
-router.post('/groups/:groupId/add-member', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
-    return next();
+// Add user to group - allows team leads to add to their own sub-groups
+router.post('/groups/:groupId/add-member', async (req, res, next) => {
+  try {
+    // Super admin and admin can always add members
+    if (['super_admin', 'admin'].includes(req.user?.role)) {
+      return next();
+    }
+
+    // For team leads, check if they are a member of this group
+    if (req.user?.role === 'team_lead') {
+      const User = require('../models/User');
+      const Group = require('../models/Group');
+
+      const user = await User.findById(req.user.id).populate('groups');
+      const group = await Group.findById(req.params.groupId);
+
+      if (!group) {
+        return res.status(404).json({ success: false, message: 'Group not found' });
+      }
+
+      // Check if team lead is a member of this group or its parent
+      const isMemberOfGroup = user.groups?.some(g =>
+        g._id.toString() === req.params.groupId ||
+        g._id.toString() === group.parentGroupId?.toString()
+      );
+
+      if (!isMemberOfGroup) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only add members to your own sub-groups'
+        });
+      }
+
+      return next();
+    }
+
+    // For other roles, check admin:manage permission
+    return checkPermission('admin', 'manage')(req, res, next);
+  } catch (error) {
+    console.error('Add member authorization error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking authorization',
+      error: error.message
+    });
   }
-  return checkPermission('admin', 'manage')(req, res, next);
 }, [
   body('userId').isMongoId().withMessage('Valid user ID required'),
   body('memberPermissions').optional().isArray().withMessage('Member permissions must be an array')
 ], adminController.addUserToGroup);
 
-// Remove user from group - requires admin manage permission or super admin
-router.delete('/groups/:groupId/remove-member/:userId', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
-    return next();
+// Remove user from group - allows team leads to remove from their own sub-groups
+router.delete('/groups/:groupId/remove-member/:userId', async (req, res, next) => {
+  try {
+    // Super admin and admin can always remove members
+    if (['super_admin', 'admin'].includes(req.user?.role)) {
+      return next();
+    }
+
+    // For team leads, check if they are a member of this group
+    if (req.user?.role === 'team_lead') {
+      const User = require('../models/User');
+      const Group = require('../models/Group');
+
+      const user = await User.findById(req.user.id).populate('groups');
+      const group = await Group.findById(req.params.groupId);
+
+      if (!group) {
+        return res.status(404).json({ success: false, message: 'Group not found' });
+      }
+
+      // Check if team lead is a member of this group or its parent
+      const isMemberOfGroup = user.groups?.some(g =>
+        g._id.toString() === req.params.groupId ||
+        g._id.toString() === group.parentGroupId?.toString()
+      );
+
+      if (!isMemberOfGroup) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only remove members from your own sub-groups'
+        });
+      }
+
+      return next();
+    }
+
+    // For other roles, check admin:manage permission
+    return checkPermission('admin', 'manage')(req, res, next);
+  } catch (error) {
+    console.error('Remove member authorization error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking authorization',
+      error: error.message
+    });
   }
-  return checkPermission('admin', 'manage')(req, res, next);
 }, adminController.removeUserFromGroup);
 
-// Update member permissions within a group - requires admin manage permission or super admin
-router.put('/groups/:groupId/members/:userId/permissions', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
-    return next();
+// Update member permissions within a group - allows team leads to update their own sub-group members
+router.put('/groups/:groupId/members/:userId/permissions', async (req, res, next) => {
+  try {
+    // Super admin and admin can always update permissions
+    if (['super_admin', 'admin'].includes(req.user?.role)) {
+      return next();
+    }
+
+    // For team leads, check if they are a member of this group
+    if (req.user?.role === 'team_lead') {
+      const User = require('../models/User');
+      const Group = require('../models/Group');
+
+      const user = await User.findById(req.user.id).populate('groups');
+      const group = await Group.findById(req.params.groupId);
+
+      if (!group) {
+        return res.status(404).json({ success: false, message: 'Group not found' });
+      }
+
+      // Check if team lead is a member of this group or its parent
+      const isMemberOfGroup = user.groups?.some(g =>
+        g._id.toString() === req.params.groupId ||
+        g._id.toString() === group.parentGroupId?.toString()
+      );
+
+      if (!isMemberOfGroup) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only update permissions for members in your own sub-groups'
+        });
+      }
+
+      return next();
+    }
+
+    // For other roles, check admin:manage permission
+    return checkPermission('admin', 'manage')(req, res, next);
+  } catch (error) {
+    console.error('Update member permissions authorization error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking authorization',
+      error: error.message
+    });
   }
-  return checkPermission('admin', 'manage')(req, res, next);
 }, [
   body('memberPermissions').optional().isArray().withMessage('Member permissions must be an array')
 ], adminController.updateMemberPermissions);
