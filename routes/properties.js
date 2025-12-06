@@ -1,6 +1,7 @@
 const express = require('express');
 const propertyController = require('../controllers/propertyController');
 const { authenticate } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 const { body, param, query } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 
@@ -111,18 +112,30 @@ router.post('/:id/invest',
   propertyController.investInProperty
 );
 
-// PATCH /api/properties/:id/deactivate - Deactivate property
+// PATCH /api/properties/:id/deactivate - Deactivate property (requires properties edit permission)
 router.patch('/:id/deactivate',
   authenticate,
+  (req, res, next) => {
+    if (req.user?.role === 'super_admin') {
+      return next();
+    }
+    return checkPermission('properties', 'edit')(req, res, next);
+  },
   param('id').isMongoId().withMessage('Invalid property ID'),
   body('reason').optional().trim(),
   body('comment').optional().trim(),
   propertyController.deactivateProperty
 );
 
-// PATCH /api/properties/:id/activate - Reactivate property
+// PATCH /api/properties/:id/activate - Reactivate property (requires properties edit permission)
 router.patch('/:id/activate',
   authenticate,
+  (req, res, next) => {
+    if (req.user?.role === 'super_admin') {
+      return next();
+    }
+    return checkPermission('properties', 'edit')(req, res, next);
+  },
   param('id').isMongoId().withMessage('Invalid property ID'),
   propertyController.activateProperty
 );

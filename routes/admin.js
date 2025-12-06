@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { authenticate, authorize } = require('../middleware/auth');
+const { checkPermission, requireSuperAdmin } = require('../middleware/permissions');
 const cloudinaryUpload = require('../middleware/cloudinary-upload');
 const { body, query } = require('express-validator');
 
@@ -19,7 +20,7 @@ router.use(authenticate);
 
 // ========== SUPER ADMIN ONLY - ADMIN CREATION ==========
 // Register new admin (super admin only - creates new admin users)
-router.post('/admin-users', authorize('super_admin'), [
+router.post('/admin-users', requireSuperAdmin, [
   body('firstName').trim().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
   body('lastName').trim().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
   body('email').isEmail().withMessage('Valid email required'),
@@ -29,27 +30,32 @@ router.post('/admin-users', authorize('super_admin'), [
   body('position').optional().trim()
 ], adminController.createAdminUser);
 
-// Base authorization for admin routes (all admin roles can access unless specified)
-router.use(authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'));
-router.get('/all-users', adminController.getAllRegularUsers);
 // ========== ADMIN USER MANAGEMENT ROUTES ==========
 
-// Get all admin users
-router.get('/admin-users', adminController.getAdminUsers);
+// Get all admin users - super admin only
+router.get('/admin-users', requireSuperAdmin, adminController.getAdminUsers);
+
+// Get all regular users - requires user management permission or super admin
+router.get('/all-users', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('users', 'view')(req, res, next);
+}, adminController.getAllRegularUsers);
 
 // Get pending admins (awaiting verification) - super admin only
-router.get('/admin-users/pending/list', authorize('super_admin'), adminController.getPendingAdmins);
+router.get('/admin-users/pending/list', requireSuperAdmin, adminController.getPendingAdmins);
 
 // Verify/Approve a pending admin (super admin only)
-router.post('/admin-users/:id/verify', authorize('super_admin'), [
+router.post('/admin-users/:id/verify', requireSuperAdmin, [
   body('approved').isBoolean().withMessage('Approved must be boolean')
 ], adminController.verifyAdmin);
 
 // Get specific admin user details (super admin only)
-router.get('/admin-users/:id', authorize('super_admin'), adminController.getAdminUserDetails);
+router.get('/admin-users/:id', requireSuperAdmin, adminController.getAdminUserDetails);
 
 // Update admin user details (super admin only, requires OTP)
-router.put('/admin-users/:id/details', authorize('super_admin'), [
+router.put('/admin-users/:id/details', requireSuperAdmin, [
   body('firstName').trim().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
   body('lastName').trim().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
   body('email').isEmail().withMessage('Valid email required'),
@@ -57,74 +63,112 @@ router.put('/admin-users/:id/details', authorize('super_admin'), [
 ], adminController.updateAdminUserDetails);
 
 // Deactivate admin user (super admin only, requires OTP)
-router.put('/admin-users/:id/deactivate', authorize('super_admin'), adminController.deactivateAdminUser);
+router.put('/admin-users/:id/deactivate', requireSuperAdmin, adminController.deactivateAdminUser);
 
 // Reactivate admin user (super admin only)
-router.put('/admin-users/:id/reactivate', authorize('super_admin'), adminController.reactivateAdminUser);
+router.put('/admin-users/:id/reactivate', requireSuperAdmin, adminController.reactivateAdminUser);
 
 // ========== ROLE MANAGEMENT ROUTES ==========
 
 // Promote user to super admin (super admin only, requires OTP)
-router.put('/admin-users/:id/promote-super-admin', authorize('super_admin'), adminController.promoteToSuperAdmin);
+router.put('/admin-users/:id/promote-super-admin', requireSuperAdmin, adminController.promoteToSuperAdmin);
 
 // Update admin user role (super admin only, requires OTP)
-router.put('/admin-users/:id/role', authorize('super_admin'), [
+router.put('/admin-users/:id/role', requireSuperAdmin, [
   body('role').isIn(['admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer', 'team_lead', 'team_member']).withMessage('Invalid role')
 ], adminController.updateAdminRole);
 
 // Delete admin user (super admin only)
-router.delete('/admin-users/:id', authorize('super_admin'), adminController.deleteAdminUser);
+router.delete('/admin-users/:id', requireSuperAdmin, adminController.deleteAdminUser);
 
 // ========== USER PROMOTION ROUTES ==========
 
 // Get eligible users for promotion to admin (super admin only)
-router.get('/eligible-users', authorize('super_admin'), adminController.getEligibleUsers);
+router.get('/eligible-users', requireSuperAdmin, adminController.getEligibleUsers);
 
 // Promote regular user to admin role (super admin only, requires OTP)
-router.post('/promote-user', authorize('super_admin'), [
+router.post('/promote-user', requireSuperAdmin, [
   body('userId').isMongoId().withMessage('Valid user ID required'),
   body('role').isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer']).withMessage('Invalid admin role')
 ], adminController.promoteUserToAdmin);
 
 // ========== REGULAR USER MANAGEMENT ROUTES ==========
 
-// Get all regular users
-router.get('/users', adminController.getAllUsers);
+// Get all regular users - requires user view permission or super admin
+router.get('/users', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('users', 'view')(req, res, next);
+}, adminController.getAllUsers);
 
-// Update user KYC status (super admin and KYC officers)
-router.put('/users/:id/kyc-status', authorize('super_admin', 'kyc_officer'), [
+// Update user KYC status (super admin and users with kyc:approval permission)
+router.put('/users/:id/kyc-status', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('kyc:approval', 'edit')(req, res, next);
+}, [
   body('status').isIn(['pending', 'approved', 'rejected']).withMessage('Invalid KYC status')
 ], adminController.updateKycStatus);
 
 // ========== PROPERTY MANAGEMENT ROUTES ==========
 
+// Create new property (requires properties edit permission or super admin)
+router.post('/properties', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('properties', 'edit')(req, res, next);
+}, ...cloudinaryUpload.single('image'), adminController.createProperty);
 
+// Update property (requires properties edit permission or super admin)
+router.patch('/properties/:id', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('properties', 'edit')(req, res, next);
+}, ...cloudinaryUpload.single('image'), adminController.updateProperty);
 
-// Create new property (super admin and property managers, requires OTP) - Single image upload with Cloudinary
-router.post('/properties', authorize('super_admin', 'property_manager'), ...cloudinaryUpload.single('image'), adminController.createProperty);
-
-// Update property (super admin and property managers, requires OTP) - Single image upload with Cloudinary
-router.patch('/properties/:id', authorize('super_admin', 'property_manager'), ...cloudinaryUpload.single('image'), adminController.updateProperty);
-
-// Delete property (super admin and property managers, requires OTP)
-router.delete('/properties/:id', authorize('super_admin', 'property_manager'), adminController.deleteProperty);
+// Delete property (requires properties delete permission or super admin)
+router.delete('/properties/:id', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('properties', 'delete')(req, res, next);
+}, adminController.deleteProperty);
 
 // ========== DASHBOARD AND REPORTS ==========
 
-// Get admin dashboard data
+// Get admin dashboard data - available to all authenticated admin users
 router.get('/dashboard', adminController.getDashboard);
 
-// Get active investors list
-router.get('/investors', adminController.getActiveInvestors);
+// Get active investors list - requires users view permission or super admin
+router.get('/investors', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('users', 'view')(req, res, next);
+}, adminController.getActiveInvestors);
 
-// Get specific investor by ID
-router.get('/investors/:id', adminController.getInvestorById);
+// Get specific investor by ID - requires users view permission or super admin
+router.get('/investors/:id', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('users', 'view')(req, res, next);
+}, adminController.getInvestorById);
 
 // Get OTP status for current user
 router.get('/otp-status', adminController.getOTPStatus);
 
-// Get transactions and withdrawal data
-router.get('/transactions', authorize('super_admin', 'financial_analyst'), [
+// Get transactions and withdrawal data - requires financial view permission or super admin
+router.get('/transactions', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('transactions', 'view')(req, res, next);
+}, [
   query('startDate').optional().isISO8601().withMessage('Invalid start date'),
   query('endDate').optional().isISO8601().withMessage('Invalid end date'),
   query('status').optional().isIn(['pending', 'completed', 'failed', 'approved', 'rejected']).withMessage('Invalid status'),
@@ -133,15 +177,25 @@ router.get('/transactions', authorize('super_admin', 'financial_analyst'), [
   query('offset').optional().isInt({ min: 0 }).toInt().withMessage('Offset must be at least 0')
 ], adminController.getTransactions);
 
-// Get analytics and platform insights
-router.get('/analytics', authorize('super_admin', 'financial_analyst'), [
+// Get analytics and platform insights - requires analytics view permission or super admin
+router.get('/analytics', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('analytics', 'view')(req, res, next);
+}, [
   query('startDate').optional().isISO8601().withMessage('Invalid start date'),
   query('endDate').optional().isISO8601().withMessage('Invalid end date'),
   query('range').optional().isIn(['7days', '30days', '90days', '1year']).withMessage('Invalid date range')
 ], adminController.getAnalytics);
 
-// Get earnings report (super admin and financial analysts)
-router.get('/reports/earnings', authorize('super_admin', 'financial_analyst'), [
+// Get earnings report (requires analytics/finance view permission or super admin)
+router.get('/reports/earnings', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('analytics', 'view')(req, res, next);
+}, [
   query('startDate').optional().isISO8601().withMessage('Invalid start date'),
   query('endDate').optional().isISO8601().withMessage('Invalid end date'),
   query('propertyId').optional().isMongoId().withMessage('Invalid property ID'),
@@ -151,13 +205,13 @@ router.get('/reports/earnings', authorize('super_admin', 'financial_analyst'), [
 // ========== RBAC - ROLE MANAGEMENT ROUTES (Super Admin Only) ==========
 
 // Get all roles
-router.get('/roles', authorize('super_admin'), adminController.getRoles);
+router.get('/roles', requireSuperAdmin, adminController.getRoles);
 
 // Get specific role by ID
-router.get('/roles/:id', authorize('super_admin'), adminController.getRoleById);
+router.get('/roles/:id', requireSuperAdmin, adminController.getRoleById);
 
 // Create new role
-router.post('/roles', authorize('super_admin'), [
+router.post('/roles', requireSuperAdmin, [
   body('name').trim().isLength({ min: 2 }).withMessage('Role name must be at least 2 characters'),
   body('displayName').trim().isLength({ min: 2 }).withMessage('Display name must be at least 2 characters'),
   body('description').optional().trim(),
@@ -165,33 +219,48 @@ router.post('/roles', authorize('super_admin'), [
 ], adminController.createRole);
 
 // Update role
-router.put('/roles/:id', authorize('super_admin'), [
+router.put('/roles/:id', requireSuperAdmin, [
   body('displayName').optional().trim().isLength({ min: 2 }),
   body('description').optional().trim(),
   body('permissions').optional().isArray()
 ], adminController.updateRole);
 
 // Delete role (only if no users assigned)
-router.delete('/roles/:id', authorize('super_admin'), adminController.deleteRole);
+router.delete('/roles/:id', requireSuperAdmin, adminController.deleteRole);
 
 // Assign role to user
-router.post('/users/:userId/assign-role', authorize('super_admin'), [
+router.post('/users/:userId/assign-role', requireSuperAdmin, [
   body('roleId').isMongoId().withMessage('Valid role ID required')
 ], adminController.assignRoleToUser);
 
 // Remove role from user
-router.delete('/users/:userId/remove-role', authorize('super_admin'), adminController.removeRoleFromUser);
+router.delete('/users/:userId/remove-role', requireSuperAdmin, adminController.removeRoleFromUser);
 
-// ========== RBAC - GROUP MANAGEMENT ROUTES (Super Admin Only) ==========
+// ========== RBAC - GROUP MANAGEMENT ROUTES ==========
 
-// Get all groups
-router.get('/groups', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), adminController.getGroups);
+// Get all groups - requires admin permission or super admin
+router.get('/groups', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('admin', 'view')(req, res, next);
+}, adminController.getGroups);
 
-// Get specific group by ID with members
-router.get('/groups/:id', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), adminController.getGroupById);
+// Get specific group by ID with members - requires admin permission or super admin
+router.get('/groups/:id', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('admin', 'view')(req, res, next);
+}, adminController.getGroupById);
 
-// Create new group
-router.post('/groups', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), [
+// Create new group - requires admin manage permission or super admin
+router.post('/groups', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('admin', 'manage')(req, res, next);
+}, [
   body('name').trim().isLength({ min: 2 }).withMessage('Group name must be at least 2 characters'),
   body('displayName').trim().isLength({ min: 2 }).withMessage('Display name must be at least 2 characters'),
   body('description').optional().trim(),
@@ -202,8 +271,13 @@ router.post('/groups', authorize('admin', 'super_admin', 'kyc_officer', 'propert
   body('overriddenPermissions').optional().isArray().withMessage('Overridden permissions must be an array')
 ], adminController.createGroup);
 
-// Update group
-router.put('/groups/:id', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), [
+// Update group - requires admin manage permission or super admin
+router.put('/groups/:id', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('admin', 'manage')(req, res, next);
+}, [
   body('displayName').optional().trim().isLength({ min: 2 }),
   body('description').optional().trim(),
   body('department').optional().trim(),
@@ -211,34 +285,54 @@ router.put('/groups/:id', authorize('admin', 'super_admin', 'kyc_officer', 'prop
   body('defaultRole').optional().isMongoId()
 ], adminController.updateGroup);
 
-// Delete group
-router.delete('/groups/:id', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), adminController.deleteGroup);
+// Delete group - requires admin manage permission or super admin
+router.delete('/groups/:id', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('admin', 'manage')(req, res, next);
+}, adminController.deleteGroup);
 
-// Add user to group
-router.post('/groups/:groupId/add-member', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), [
+// Add user to group - requires admin manage permission or super admin
+router.post('/groups/:groupId/add-member', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('admin', 'manage')(req, res, next);
+}, [
   body('userId').isMongoId().withMessage('Valid user ID required'),
   body('memberPermissions').optional().isArray().withMessage('Member permissions must be an array')
 ], adminController.addUserToGroup);
 
-// Remove user from group
-router.delete('/groups/:groupId/remove-member/:userId', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), adminController.removeUserFromGroup);
+// Remove user from group - requires admin manage permission or super admin
+router.delete('/groups/:groupId/remove-member/:userId', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('admin', 'manage')(req, res, next);
+}, adminController.removeUserFromGroup);
 
-// Update member permissions within a group
-router.put('/groups/:groupId/members/:userId/permissions', authorize('admin', 'super_admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer'), [
+// Update member permissions within a group - requires admin manage permission or super admin
+router.put('/groups/:groupId/members/:userId/permissions', (req, res, next) => {
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+  return checkPermission('admin', 'manage')(req, res, next);
+}, [
   body('memberPermissions').optional().isArray().withMessage('Member permissions must be an array')
 ], adminController.updateMemberPermissions);
 
 // Get all users with their roles and groups
-router.get('/rbac/users', authorize('super_admin'), adminController.getUsersWithRBAC);
+router.get('/rbac/users', requireSuperAdmin, adminController.getUsersWithRBAC);
 
 // Get user's effective permissions
-router.get('/users/:userId/permissions', authorize('super_admin'), adminController.getUserPermissions);
+router.get('/users/:userId/permissions', requireSuperAdmin, adminController.getUserPermissions);
 
 // Initialize default roles (one-time setup)
-router.post('/rbac/initialize', authorize('super_admin'), adminController.initializeDefaultRoles);
+router.post('/rbac/initialize', requireSuperAdmin, adminController.initializeDefaultRoles);
 
 // Update security settings (super admin only)
-router.put('/security-settings', authorize('super_admin'), adminController.updateSecuritySettings);
+router.put('/security-settings', requireSuperAdmin, adminController.updateSecuritySettings);
 
 // ========== NOTIFICATIONS ROUTES ==========
 
@@ -252,7 +346,7 @@ router.put('/notifications/:id/read', adminController.markNotificationAsRead);
 router.put('/notifications/mark-all-read', adminController.markAllNotificationsAsRead);
 
 // Create and send notification to users
-router.post('/notifications', authorize('super_admin'), [
+router.post('/notifications', requireSuperAdmin, [
   body('title').trim().isLength({ min: 3 }).withMessage('Title must be at least 3 characters'),
   body('message').trim().isLength({ min: 10 }).withMessage('Message must be at least 10 characters'),
   body('type').optional().isIn(['info', 'success', 'warning', 'error', 'system_announcement', 'app_update', 'policy_change']).withMessage('Invalid notification type'),
