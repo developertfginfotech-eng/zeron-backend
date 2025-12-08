@@ -201,7 +201,7 @@ class WalletController {
         });
       }
 
-      const { amount, accountDetails, description } = req.body;
+      const { amount, accountDetails, description, propertyId } = req.body;
 
       // Validate amount
       if (amount < 1000) {
@@ -211,8 +211,8 @@ class WalletController {
         });
       }
 
-      // Get user and check balance
-      const user = await User.findById(req.user.id);
+      // Get user
+      const user = await User.findById(req.user.id).populate('groups');
 
       // Get current balance
       const balanceSummary = await Transaction.getUserBalance(req.user.id);
@@ -228,36 +228,31 @@ class WalletController {
         });
       }
 
-      // Create withdrawal transaction
-      const transaction = new Transaction({
-        user: req.user.id,
-        type: 'withdrawal',
+      // Create withdrawal request (PENDING - requires admin approval)
+      const WithdrawalRequest = require('../models/WithdrawalRequest');
+      const withdrawalRequest = new WithdrawalRequest({
+        userId: req.user.id,
+        propertyId: propertyId,
         amount: amount,
-        description: description || 'Wallet withdrawal',
-        status: 'completed',
-        paymentMethod: 'bank_transfer',
-        reference: accountDetails?.accountNumber || '',
-        balanceBefore: currentBalance,
-        balanceAfter: currentBalance - amount,
-        metadata: { accountDetails }
+        principalAmount: amount, // Can be updated if we track principal vs earnings
+        reason: description || 'Property investment withdrawal',
+        status: 'pending',
+        groupId: user.groups && user.groups.length > 0 ? user.groups[0]._id : null,
+        bankAccount: accountDetails
       });
 
-      await transaction.save();
+      await withdrawalRequest.save();
 
-      // Update user wallet balance
-      user.wallet.balance = currentBalance - amount;
-      await user.save();
-
-      logger.info(`Withdrawal from wallet for user ${req.user.id}: SAR ${amount}`);
+      logger.info(`Withdrawal request created for user ${req.user.id}: SAR ${amount} - Status: PENDING`);
 
       res.json({
         success: true,
         data: {
-          transactionId: transaction.transactionId,
+          withdrawalId: withdrawalRequest._id,
           amount: amount,
-          status: 'completed',
-          message: 'Withdrawal processed successfully',
-          newBalance: user.wallet.balance
+          status: 'pending',
+          message: 'Withdrawal request submitted. Awaiting admin approval.',
+          requestedAt: withdrawalRequest.requestedAt
         }
       });
 

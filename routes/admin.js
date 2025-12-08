@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { authenticate, authorize } = require('../middleware/auth');
-const { checkPermission, requireSuperAdmin, checkKycPermission } = require('../middleware/permissions');
+const { checkPermission, requireSuperAdmin, checkKycPermission, checkWithdrawalPermission } = require('../middleware/permissions');
 const cloudinaryUpload = require('../middleware/cloudinary-upload');
 const { body, query } = require('express-validator');
 
@@ -613,5 +613,36 @@ router.post('/notifications', requireSuperAdmin, [
   body('priority').optional().isIn(['low', 'normal', 'high', 'urgent']).withMessage('Invalid priority level'),
   body('targetUsers').optional().isArray().withMessage('Target users must be an array')
 ], adminController.createNotification);
+
+// ========== WITHDRAWAL REQUEST ROUTES ==========
+
+// Get all withdrawal requests - requires super admin, admin, or team lead
+router.get('/withdrawal-requests', (req, res, next) => {
+  if (['super_admin', 'admin', 'team_lead'].includes(req.user?.role)) {
+    return next();
+  }
+  return checkPermission('withdrawals', 'view')(req, res, next);
+}, [
+  query('status').optional().isIn(['pending', 'approved', 'rejected', 'processing', 'completed']).withMessage('Invalid status'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).toInt().withMessage('Limit must be between 1 and 100'),
+  query('offset').optional().isInt({ min: 0 }).toInt().withMessage('Offset must be at least 0')
+], adminController.getWithdrawalRequests);
+
+// Get specific withdrawal request by ID
+router.get('/withdrawal-requests/:withdrawalId', (req, res, next) => {
+  if (['super_admin', 'admin', 'team_lead'].includes(req.user?.role)) {
+    return next();
+  }
+  return checkPermission('withdrawals', 'view')(req, res, next);
+}, adminController.getWithdrawalRequestById);
+
+// Approve withdrawal request - requires withdrawal approval permission
+router.post('/withdrawal-requests/:withdrawalId/approve', checkWithdrawalPermission, adminController.approveWithdrawalRequest);
+
+// Reject withdrawal request - requires withdrawal rejection permission
+router.post('/withdrawal-requests/:withdrawalId/reject', checkWithdrawalPermission, [
+  body('rejectionReason').isIn(['insufficient_investment', 'maturity_period_active', 'suspicious_activity', 'invalid_request', 'other']).withMessage('Invalid rejection reason'),
+  body('rejectionComment').optional().trim().isLength({ min: 5 }).withMessage('Rejection comment must be at least 5 characters')
+], adminController.rejectWithdrawalRequest);
 
 module.exports = router;
