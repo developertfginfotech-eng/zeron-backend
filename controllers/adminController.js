@@ -4667,5 +4667,245 @@ async createProperty(req, res) {
     }
   }
 
+  // ========== WITHDRAWAL REQUEST HANDLERS ==========
+
+  async getWithdrawalRequests(req, res) {
+    try {
+      const { status, userId, groupId, startDate, endDate, limit = 50, offset = 0 } = req.query;
+      const query = {};
+
+      // Filter by status if provided
+      if (status) {
+        query.status = status;
+      }
+
+      // Filter by userId if provided
+      if (userId) {
+        query.userId = userId;
+      }
+
+      // Filter by date range if provided
+      if (startDate || endDate) {
+        query.requestedAt = {};
+        if (startDate) {
+          query.requestedAt.$gte = new Date(startDate);
+        }
+        if (endDate) {
+          query.requestedAt.$lte = new Date(endDate);
+        }
+      }
+
+      // For team leads, only show withdrawals from their groups
+      if (req.user?.role === 'team_lead') {
+        const userGroupIds = req.user.groups?.map(g => g._id) || [];
+        query.groupId = { $in: userGroupIds };
+      } else if (groupId) {
+        // Admins can filter by specific group
+        query.groupId = groupId;
+      }
+
+      const WithdrawalRequest = require('../models/WithdrawalRequest');
+      const total = await WithdrawalRequest.countDocuments(query);
+
+      const withdrawalRequests = await WithdrawalRequest.find(query)
+        .populate('userId', 'firstName lastName email phone')
+        .populate('propertyId', 'title')
+        .populate('reviewedBy', 'firstName lastName')
+        .populate('groupId', 'displayName')
+        .sort({ requestedAt: -1 })
+        .limit(parseInt(limit))
+        .skip(parseInt(offset));
+
+      res.json({
+        success: true,
+        data: withdrawalRequests,
+        pagination: {
+          total,
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+          hasMore: parseInt(offset) + parseInt(limit) < total
+        }
+      });
+    } catch (error) {
+      logger.error('Get withdrawal requests error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching withdrawal requests',
+        error: error.message
+      });
+    }
+  }
+
+  async getWithdrawalRequestById(req, res) {
+    try {
+      const { withdrawalId } = req.params;
+      const WithdrawalRequest = require('../models/WithdrawalRequest');
+
+      const withdrawal = await WithdrawalRequest.findById(withdrawalId)
+        .populate('userId', 'firstName lastName email phone kycStatus')
+        .populate('propertyId', 'title address')
+        .populate('reviewedBy', 'firstName lastName')
+        .populate('groupId', 'displayName');
+
+      if (!withdrawal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Withdrawal request not found'
+        });
+      }
+
+      // For team leads, check if they can view this withdrawal
+      if (req.user?.role === 'team_lead') {
+        const canView = req.user.groups?.some(g => g._id.toString() === withdrawal.groupId?._id.toString());
+        if (!canView) {
+          return res.status(403).json({
+            success: false,
+            message: 'You can only view withdrawals from your own groups'
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        data: withdrawal
+      });
+    } catch (error) {
+      logger.error('Get withdrawal request error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching withdrawal request',
+        error: error.message
+      });
+    }
+  }
+
+  async approveWithdrawalRequest(req, res) {
+    try {
+      const { withdrawalId } = req.params;
+      const WithdrawalRequest = require('../models/WithdrawalRequest');
+      const User = require('../models/User');
+      const Transaction = require('../models/Transaction');
+
+      const withdrawal = await WithdrawalRequest.findById(withdrawalId);
+
+      if (!withdrawal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Withdrawal request not found'
+        });
+      }
+
+      if (withdrawal.status !== 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot approve withdrawal with status: ${withdrawal.status}`
+        });
+      }
+
+      // Approve the withdrawal request
+      await withdrawal.approve(req.user.id);
+
+      // Create transaction for the wallet credit
+      const transaction = new Transaction({
+        userId: withdrawal.userId,
+        type: 'withdrawal_approved',
+        amount: withdrawal.amount,
+        description: `Property investment withdrawal approved`,
+        balanceBefore: 0,
+        balanceAfter: 0,
+        status: 'completed',
+        relatedWithdrawalId: withdrawal._id
+      });
+      await transaction.save();
+
+      // Update user's wallet
+      const user = await User.findById(withdrawal.userId);
+      if (user) {
+        user.wallet = (user.wallet || 0) + withdrawal.amount;
+        await user.save();
+      }
+
+      // Update withdrawal request with transaction ID
+      withdrawal.transactionId = transaction._id;
+      withdrawal.status = 'completed';
+      await withdrawal.save();
+
+      logger.info(`Withdrawal approved - ID: ${withdrawalId}, Amount: ${withdrawal.amount}, Approver: ${req.user.id}`);
+
+      res.json({
+        success: true,
+        message: 'Withdrawal request approved successfully',
+        data: {
+          withdrawalId: withdrawal._id,
+          status: withdrawal.status,
+          amount: withdrawal.amount,
+          walletUpdated: true
+        }
+      });
+    } catch (error) {
+      logger.error('Approve withdrawal error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error approving withdrawal request',
+        error: error.message
+      });
+    }
+  }
+
+  async rejectWithdrawalRequest(req, res) {
+    try {
+      const { withdrawalId } = req.params;
+      const { rejectionReason, rejectionComment } = req.body;
+
+      if (!rejectionReason) {
+        return res.status(400).json({
+          success: false,
+          message: 'Rejection reason is required'
+        });
+      }
+
+      const WithdrawalRequest = require('../models/WithdrawalRequest');
+
+      const withdrawal = await WithdrawalRequest.findById(withdrawalId);
+
+      if (!withdrawal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Withdrawal request not found'
+        });
+      }
+
+      if (withdrawal.status !== 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot reject withdrawal with status: ${withdrawal.status}`
+        });
+      }
+
+      // Reject the withdrawal request
+      await withdrawal.reject(req.user.id, rejectionReason, rejectionComment);
+
+      logger.info(`Withdrawal rejected - ID: ${withdrawalId}, Reason: ${rejectionReason}, Rejector: ${req.user.id}`);
+
+      res.json({
+        success: true,
+        message: 'Withdrawal request rejected successfully',
+        data: {
+          withdrawalId: withdrawal._id,
+          status: withdrawal.status,
+          rejectionReason: withdrawal.rejectionReason,
+          rejectionComment: withdrawal.rejectionComment
+        }
+      });
+    } catch (error) {
+      logger.error('Reject withdrawal error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error rejecting withdrawal request',
+        error: error.message
+      });
+    }
+  }
+
 }
 module.exports = new AdminController();
