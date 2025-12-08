@@ -335,7 +335,7 @@ groupSchema.methods.updateMemberPermissions = async function(userId, newPermissi
 // Static method to get user's groups
 groupSchema.statics.getUserGroups = async function(userId) {
   return this.find({
-    members: userId,
+    'members.userId': userId,
     isActive: true
   }).populate('defaultRole');
 };
@@ -343,7 +343,7 @@ groupSchema.statics.getUserGroups = async function(userId) {
 // Static method to get user's combined permissions from all groups
 groupSchema.statics.getUserPermissions = async function(userId) {
   const groups = await this.find({
-    members: userId,
+    'members.userId': userId,
     isActive: true
   });
 
@@ -351,7 +351,15 @@ groupSchema.statics.getUserPermissions = async function(userId) {
 
   // Combine permissions from all groups
   groups.forEach(group => {
-    group.permissions.forEach(permission => {
+    // Find the member record for this user
+    const memberRecord = group.members.find(m => m.userId.toString() === userId.toString());
+
+    // Use member-specific permissions if available, otherwise use group-level permissions
+    const permissionsToUse = memberRecord?.memberPermissions?.length > 0
+      ? memberRecord.memberPermissions
+      : group.permissions;
+
+    permissionsToUse.forEach(permission => {
       const key = permission.resource;
       if (!permissionsMap.has(key)) {
         permissionsMap.set(key, new Set());
