@@ -63,10 +63,21 @@ const withdrawalRequestSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction'
   },
+  // Bank account details for the withdrawal
+  bankAccount: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
   // For tracking which group the request came from (for team lead filtering)
   groupId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Group'
+  },
+  // For tracking which subgroup the request came from
+  subgroupId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Group',
+    sparse: true
   }
 }, {
   timestamps: true
@@ -77,8 +88,10 @@ withdrawalRequestSchema.index({ userId: 1 });
 withdrawalRequestSchema.index({ status: 1 });
 withdrawalRequestSchema.index({ requestedAt: -1 });
 withdrawalRequestSchema.index({ groupId: 1 });
+withdrawalRequestSchema.index({ subgroupId: 1 });
 withdrawalRequestSchema.index({ status: 1, requestedAt: -1 });
 withdrawalRequestSchema.index({ propertyId: 1 });
+withdrawalRequestSchema.index({ groupId: 1, status: 1 });
 
 // Method to approve withdrawal request
 withdrawalRequestSchema.methods.approve = async function(approverId) {

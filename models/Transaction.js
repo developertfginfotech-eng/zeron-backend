@@ -64,6 +64,18 @@ const transactionSchema = new mongoose.Schema({
   balanceAfter: {
     type: Number,
     default: 0
+  },
+  groupId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Group',
+    sparse: true,
+    index: true
+  },
+  subgroupId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Group',
+    sparse: true,
+    index: true
   }
 }, {
   timestamps: true
@@ -74,6 +86,9 @@ transactionSchema.index({ user: 1, createdAt: -1 });
 transactionSchema.index({ user: 1, type: 1 });
 transactionSchema.index({ status: 1 });
 transactionSchema.index({ transactionId: 1 });
+transactionSchema.index({ groupId: 1, createdAt: -1 });
+transactionSchema.index({ subgroupId: 1, createdAt: -1 });
+transactionSchema.index({ groupId: 1, status: 1 });
 
 // Static methods
 transactionSchema.statics.findByUser = function(userId) {
