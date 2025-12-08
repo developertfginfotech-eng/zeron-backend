@@ -4824,7 +4824,7 @@ async createProperty(req, res) {
       // Update user's wallet
       const user = await User.findById(withdrawal.userId);
       if (user) {
-        user.wallet = (user.wallet || 0) + withdrawal.amount;
+        user.wallet.balance = (user.wallet?.balance || 0) + withdrawal.amount;
         await user.save();
       }
 
