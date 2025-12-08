@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { authenticate, authorize } = require('../middleware/auth');
-const { checkPermission, requireSuperAdmin } = require('../middleware/permissions');
+const { checkPermission, requireSuperAdmin, checkKycPermission } = require('../middleware/permissions');
 const cloudinaryUpload = require('../middleware/cloudinary-upload');
 const { body, query } = require('express-validator');
 
@@ -122,24 +122,19 @@ router.get('/users', (req, res, next) => {
   return checkPermission('users', 'view')(req, res, next);
 }, adminController.getAllUsers);
 
-// Update user KYC status (super admin and users with kyc:approval permission)
-router.put('/users/:id/kyc-status', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
-    return next();
-  }
-  return checkPermission('kyc:approval', 'edit')(req, res, next);
-}, [
+// Update user KYC status (requires specific permission based on action: approve/reject/manage)
+router.put('/users/:id/kyc-status', checkKycPermission, [
   body('status').isIn(['pending', 'approved', 'rejected']).withMessage('Invalid KYC status')
 ], adminController.updateKycStatus);
 
 // ========== PROPERTY MANAGEMENT ROUTES ==========
 
-// Create new property (requires properties edit permission or super admin)
+// Create new property (requires properties create permission or super admin)
 router.post('/properties', (req, res, next) => {
   if (req.user?.role === 'super_admin') {
     return next();
   }
-  return checkPermission('properties', 'edit')(req, res, next);
+  return checkPermission('properties', 'create')(req, res, next);
 }, ...cloudinaryUpload.single('image'), adminController.createProperty);
 
 // Update property (requires properties edit permission or super admin)

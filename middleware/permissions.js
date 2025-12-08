@@ -178,9 +178,87 @@ const attachPermissions = async (req, res, next) => {
   }
 };
 
+/**
+ * Middleware to check KYC approval/rejection with action-specific permissions
+ * Requires 'approve' action for approved status and 'reject' action for rejected status
+ */
+const checkKycPermission = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // Get full user with groups and role populated
+    const user = await User.findById(req.user.id)
+      .populate('assignedRole')
+      .populate('groups');
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Super admin has all permissions
+    if (user.role === 'super_admin') {
+      req.user = user;
+      return next();
+    }
+
+    // Get the status from request body
+    const { status } = req.body;
+
+    // Determine required action based on status
+    let requiredAction;
+    if (status === 'approved') {
+      requiredAction = 'approve';
+    } else if (status === 'rejected') {
+      requiredAction = 'reject';
+    } else if (status === 'pending') {
+      // Pending status requires manage permission
+      requiredAction = 'manage';
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid KYC status'
+      });
+    }
+
+    // Check if user has the required permission for this specific action
+    const hasPermission = await user.hasPermission('kyc:approval', requiredAction);
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message: `You don't have permission to ${requiredAction} KYC status`,
+        required: {
+          resource: 'kyc:approval',
+          action: requiredAction
+        }
+      });
+    }
+
+    // Attach full user to request for later use
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('KYC permission check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error checking KYC permissions',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   checkPermission,
   requireAdmin,
   requireSuperAdmin,
-  attachPermissions
+  attachPermissions,
+  checkKycPermission
 };
