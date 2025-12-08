@@ -4805,21 +4805,26 @@ async createProperty(req, res) {
       // Approve the withdrawal request
       await withdrawal.approve(req.user.id);
 
-      // Create transaction for the wallet credit
+      // Create transaction for the wallet credit (payout = money to user)
       const transaction = new Transaction({
         user: withdrawal.userId,
-        type: 'withdrawal',
+        type: 'payout',
         amount: withdrawal.amount,
-        description: `Property investment withdrawal approved`,
-        balanceBefore: 0,
-        balanceAfter: 0,
+        description: `Property investment withdrawal approved - ${withdrawal.amount} credited to wallet`,
         status: 'completed',
         relatedEntity: 'withdrawal',
         relatedEntityId: withdrawal._id,
         groupId: withdrawal.groupId,
         subgroupId: withdrawal.subgroupId
       });
-      await transaction.save();
+
+      try {
+        await transaction.save();
+        logger.info(`Transaction created for withdrawal approval - ID: ${transaction._id}, Amount: ${withdrawal.amount}`);
+      } catch (txnError) {
+        logger.error(`Failed to create transaction for withdrawal ${withdrawalId}:`, txnError);
+        throw txnError;
+      }
 
       // Update user's wallet
       const user = await User.findById(withdrawal.userId);
