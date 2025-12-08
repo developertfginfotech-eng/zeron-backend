@@ -421,6 +421,11 @@ router.post('/',
         const investedAmount = totalInvested[0]?.total || 0;
         property.fundingProgress = Math.min(100, (investedAmount / property.financials.totalValue) * 100);
       }
+
+      // Update investor count for this property
+      const uniqueInvestors = await Investment.distinct('user', { property: new mongoose.Types.ObjectId(propertyId), status: 'confirmed' });
+      property.investorCount = uniqueInvestors.length;
+
       await property.save();
 
       logger.info(`Investment created: User ${userId}, Property ${propertyId}, Amount SAR ${amount}`);
@@ -697,6 +702,32 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to process withdrawal',
+      error: error.message
+    });
+  }
+});
+
+// Get investor's withdrawal requests
+router.get('/withdrawal-requests', authenticate, async (req, res) => {
+  try {
+    const WithdrawalRequest = require('../models/WithdrawalRequest');
+
+    const withdrawalRequests = await WithdrawalRequest.find({
+      userId: req.user.id
+    })
+    .populate('propertyId', 'title')
+    .sort({ requestedAt: -1 });
+
+    res.json({
+      success: true,
+      data: withdrawalRequests
+    });
+
+  } catch (error) {
+    logger.error('Get withdrawal requests error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching withdrawal requests',
       error: error.message
     });
   }
