@@ -623,8 +623,8 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
       withdrawalAmount = totalValue;
     }
 
-    // Get user and update wallet
-    const user = await User.findById(req.user.id);
+    // Get user
+    const user = await User.findById(req.user.id).populate('groups');
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -632,54 +632,42 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
       });
     }
 
-    // Get current balance
-    const balanceSummary = await Transaction.getUserBalance(req.user.id);
-    const balanceBefore = (balanceSummary.totalDeposits || 0) -
-                         (balanceSummary.totalWithdrawals || 0) -
-                         (balanceSummary.totalInvestments || 0) +
-                         (balanceSummary.totalPayouts || 0);
-
-    // Create withdrawal transaction
-    const transaction = new Transaction({
-      user: req.user.id,
-      type: 'payout',
+    // Create PENDING withdrawal request (requires admin approval)
+    const WithdrawalRequest = require('../models/WithdrawalRequest');
+    const withdrawalRequest = new WithdrawalRequest({
+      userId: req.user.id,
+      propertyId: investment.property._id,
+      investmentId: investment._id,
       amount: withdrawalAmount,
-      description: `Withdrawal from ${investment.property.title} - ${isEarlyWithdrawal ? 'Early (with penalty)' : 'After maturity'}`,
-      status: 'completed',
-      paymentMethod: 'wallet',
-      relatedEntity: 'investment',
-      relatedEntityId: investment._id,
-      balanceBefore: Math.max(balanceBefore, 0),
-      balanceAfter: Math.max(balanceBefore + withdrawalAmount, 0),
+      principalAmount: principalAmount,
+      rentalYieldEarned: totalRentalYield,
+      reason: `Investment withdrawal - ${isEarlyWithdrawal ? 'Early (with penalty)' : 'After maturity'}`,
+      status: 'pending',
+      groupId: user.groups && user.groups.length > 0 ? user.groups[0]._id : null,
       metadata: {
-        principalAmount,
-        rentalYield: totalRentalYield,
         appreciationGain,
         penalty,
         isEarlyWithdrawal,
-        holdingPeriodYears: holdingPeriodYears.toFixed(2)
+        holdingPeriodYears: holdingPeriodYears.toFixed(2),
+        actualPenaltyRate
       }
     });
 
-    await transaction.save();
+    await withdrawalRequest.save();
 
-    // Update user wallet
-    user.wallet.balance = Math.max(balanceBefore + withdrawalAmount, 0);
-    user.wallet.totalReturns = (user.wallet.totalReturns || 0) + totalRentalYield + appreciationGain;
-    await user.save();
-
-    // Update investment status
-    investment.status = 'cancelled';
+    // Update investment status to 'withdrawal_requested'
+    investment.status = 'withdrawal_requested';
     investment.exitDate = now;
     investment.returns.totalReturnsReceived = totalRentalYield + appreciationGain;
     investment.returns.lastReturnDate = now;
     await investment.save();
 
-    logger.info(`Investment withdrawn: User ${req.user.id}, Investment ${investment._id}, Amount SAR ${withdrawalAmount}`);
+    logger.info(`Withdrawal request created: User ${req.user.id}, Investment ${investment._id}, Amount SAR ${withdrawalAmount}, Status: PENDING`);
 
     res.json({
       success: true,
       data: {
+        withdrawalId: withdrawalRequest._id,
         withdrawalDetails: {
           principalAmount,
           rentalYieldEarned: totalRentalYield,
@@ -699,11 +687,9 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
           appreciationRate: `${appreciationRate}%`,
           penaltyRate: isEarlyWithdrawal ? `${actualPenaltyRate}%` : 'N/A'
         },
-        newWalletBalance: user.wallet.balance
+        status: 'pending'
       },
-      message: isEarlyWithdrawal
-        ? `Early withdrawal completed with ${actualPenaltyRate}% penalty (Year ${Math.floor(holdingPeriodYears) + 1}). Amount credited: SAR ${withdrawalAmount.toFixed(2)}`
-        : `Withdrawal after maturity completed. Total returns: SAR ${(totalRentalYield + appreciationGain).toFixed(2)}`
+      message: `Withdrawal request submitted for admin approval. You will be notified once it's processed.`
     });
 
   } catch (error) {

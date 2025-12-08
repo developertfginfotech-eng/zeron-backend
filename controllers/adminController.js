@@ -4807,14 +4807,17 @@ async createProperty(req, res) {
 
       // Create transaction for the wallet credit
       const transaction = new Transaction({
-        userId: withdrawal.userId,
-        type: 'withdrawal_approved',
+        user: withdrawal.userId,
+        type: 'withdrawal',
         amount: withdrawal.amount,
         description: `Property investment withdrawal approved`,
         balanceBefore: 0,
         balanceAfter: 0,
         status: 'completed',
-        relatedWithdrawalId: withdrawal._id
+        relatedEntity: 'withdrawal',
+        relatedEntityId: withdrawal._id,
+        groupId: withdrawal.groupId,
+        subgroupId: withdrawal.subgroupId
       });
       await transaction.save();
 
