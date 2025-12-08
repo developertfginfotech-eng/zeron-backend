@@ -4810,12 +4810,17 @@ async createProperty(req, res) {
         user: withdrawal.userId,
         type: 'payout',
         amount: withdrawal.amount,
-        description: `Property investment withdrawal approved - ${withdrawal.amount} credited to wallet`,
+        description: `Property investment withdrawal approved - SAR ${withdrawal.amount} credited to wallet`,
         status: 'completed',
-        relatedEntity: 'withdrawal',
-        relatedEntityId: withdrawal._id,
+        paymentMethod: 'wallet',
+        relatedEntity: withdrawal.propertyId ? 'property' : 'investment',
+        relatedEntityId: withdrawal.propertyId || withdrawal._id,
         groupId: withdrawal.groupId,
-        subgroupId: withdrawal.subgroupId
+        subgroupId: withdrawal.subgroupId,
+        metadata: {
+          withdrawalRequestId: withdrawal._id,
+          approvedBy: req.user.id
+        }
       });
 
       try {
