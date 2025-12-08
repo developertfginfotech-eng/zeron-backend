@@ -655,8 +655,8 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
 
     await withdrawalRequest.save();
 
-    // Update investment status to 'withdrawal_requested'
-    investment.status = 'withdrawal_requested';
+    // Update investment status to 'cancelled' (withdrawal requested)
+    investment.status = 'cancelled';
     investment.exitDate = now;
     investment.returns.totalReturnsReceived = totalRentalYield + appreciationGain;
     investment.returns.lastReturnDate = now;
