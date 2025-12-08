@@ -24,6 +24,14 @@ class WalletController {
       // Get transaction summary
       const balanceSummary = await Transaction.getUserBalance(req.user.id);
 
+      // Debug logging
+      logger.info(`Wallet Balance Calculation for User ${req.user.id}:`, {
+        totalDeposits: balanceSummary.totalDeposits || 0,
+        totalWithdrawals: balanceSummary.totalWithdrawals || 0,
+        totalInvestments: balanceSummary.totalInvestments || 0,
+        totalPayouts: balanceSummary.totalPayouts || 0
+      });
+
       // Calculate current balance
       const currentBalance = (balanceSummary.totalDeposits || 0) -
                            (balanceSummary.totalWithdrawals || 0) -
