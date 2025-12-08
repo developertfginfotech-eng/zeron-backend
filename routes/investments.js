@@ -676,6 +676,14 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
 
     // Create PENDING withdrawal request (requires admin approval)
     const WithdrawalRequest = require('../models/WithdrawalRequest');
+
+    console.log(`✅ FINAL VALIDATED AMOUNT:`, {
+      withdrawalAmount,
+      validatedAmount,
+      type: typeof validatedAmount,
+      isFinite: isFinite(validatedAmount)
+    });
+
     const withdrawalRequest = new WithdrawalRequest({
       userId: req.user.id,
       propertyId: investment.property._id,
