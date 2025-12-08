@@ -4806,8 +4806,9 @@ async createProperty(req, res) {
       await withdrawal.approve(req.user.id);
 
       // Create transaction for the wallet credit (payout = money to user)
+      const mongoose = require('mongoose');
       const transaction = new Transaction({
-        user: withdrawal.userId,
+        user: new mongoose.Types.ObjectId(withdrawal.userId),
         type: 'payout',
         amount: withdrawal.amount,
         description: `Property investment withdrawal approved - ${withdrawal.amount} credited to wallet`,
@@ -4820,9 +4821,15 @@ async createProperty(req, res) {
 
       try {
         await transaction.save();
-        logger.info(`Transaction created for withdrawal approval - ID: ${transaction._id}, Amount: ${withdrawal.amount}`);
+        logger.info(`✅ Payout Transaction CREATED for withdrawal approval:`, {
+          transactionId: transaction._id,
+          userId: withdrawal.userId,
+          amount: withdrawal.amount,
+          type: 'payout',
+          status: 'completed'
+        });
       } catch (txnError) {
-        logger.error(`Failed to create transaction for withdrawal ${withdrawalId}:`, txnError);
+        logger.error(`❌ Failed to create transaction for withdrawal ${withdrawalId}:`, txnError);
         throw txnError;
       }
 
