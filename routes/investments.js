@@ -594,6 +594,17 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
     let withdrawalAmount = 0;
     let actualPenaltyRate = penaltyRate;
 
+    // Debug logging
+    console.log(`\n🔍 WITHDRAWAL CALCULATION DEBUG:`, {
+      investmentId: investment._id,
+      principalAmount,
+      rentalYieldRate,
+      appreciationRate,
+      penaltyRate,
+      holdingPeriodYears,
+      totalRentalYield
+    });
+
     if (isEarlyWithdrawal) {
       // EARLY WITHDRAWAL (Before Maturity)
       // User gets: Principal + Rental Yield - Penalty
@@ -639,11 +650,27 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
 
     // Validate and round withdrawal amount to 2 decimal places
     const validatedAmount = Math.round(withdrawalAmount * 100) / 100;
-    if (!isFinite(validatedAmount) || validatedAmount <= 0) {
+
+    // Max reasonable amount: principal + (principal * 200% rental yield)
+    const maxReasonableAmount = principalAmount * 3;
+
+    if (!isFinite(validatedAmount) || validatedAmount <= 0 || validatedAmount > maxReasonableAmount) {
+      console.error(`Invalid withdrawal amount: ${validatedAmount} (max: ${maxReasonableAmount})`, {
+        withdrawalAmount,
+        validatedAmount,
+        principalAmount,
+        maxReasonableAmount,
+        totalRentalYield,
+        isEarlyWithdrawal
+      });
       return res.status(400).json({
         success: false,
         message: 'Invalid withdrawal amount calculated',
-        details: { withdrawalAmount, validatedAmount }
+        details: {
+          withdrawalAmount,
+          validatedAmount,
+          maxAllowed: maxReasonableAmount
+        }
       });
     }
 
