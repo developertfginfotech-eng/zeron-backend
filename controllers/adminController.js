@@ -4806,7 +4806,6 @@ async createProperty(req, res) {
       await withdrawal.approve(req.user.id);
 
       // Create transaction for the wallet credit (payout = money to user)
-      const mongoose = require('mongoose');
       const transaction = new Transaction({
         user: new mongoose.Types.ObjectId(withdrawal.userId),
         type: 'payout',
