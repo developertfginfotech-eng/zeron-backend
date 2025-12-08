@@ -269,12 +269,59 @@ router.get('/groups/:id', (req, res, next) => {
   return checkPermission('admin', 'view')(req, res, next);
 }, adminController.getGroupById);
 
-// Create new group - requires admin manage permission or super admin
-router.post('/groups', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
-    return next();
+// Create new group - allows team leads to create sub-groups within their own groups
+router.post('/groups', async (req, res, next) => {
+  try {
+    if (['super_admin', 'admin'].includes(req.user?.role)) {
+      return next();
+    }
+
+    // For team leads, check if they are trying to create a sub-group of their own group
+    if (req.user?.role === 'team_lead') {
+      const { parentGroupId } = req.body;
+
+      if (!parentGroupId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Team leads can only create sub-groups within their own groups'
+        });
+      }
+
+      const User = require('../models/User');
+      const Group = require('../models/Group');
+
+      const user = await User.findById(req.user.id).populate('groups');
+      const parentGroup = await Group.findById(parentGroupId);
+
+      if (!parentGroup) {
+        return res.status(404).json({ success: false, message: 'Parent group not found' });
+      }
+
+      // Check if team lead is a member of the parent group
+      const isMemberOfParentGroup = user.groups?.some(g =>
+        g._id.toString() === parentGroupId
+      );
+
+      if (!isMemberOfParentGroup) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only create sub-groups within your own group'
+        });
+      }
+
+      return next();
+    }
+
+    // For other roles, check admin:manage permission
+    return checkPermission('admin', 'manage')(req, res, next);
+  } catch (error) {
+    console.error('Create group authorization error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking authorization',
+      error: error.message
+    });
   }
-  return checkPermission('admin', 'manage')(req, res, next);
 }, [
   body('name').trim().isLength({ min: 2 }).withMessage('Group name must be at least 2 characters'),
   body('displayName').trim().isLength({ min: 2 }).withMessage('Display name must be at least 2 characters'),
@@ -286,12 +333,51 @@ router.post('/groups', (req, res, next) => {
   body('overriddenPermissions').optional().isArray().withMessage('Overridden permissions must be an array')
 ], adminController.createGroup);
 
-// Update group - requires admin manage permission or super admin
-router.put('/groups/:id', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
-    return next();
+// Update group - allows team leads to update their own groups
+router.put('/groups/:id', async (req, res, next) => {
+  try {
+    if (['super_admin', 'admin'].includes(req.user?.role)) {
+      return next();
+    }
+
+    // For team leads, check if they are a member of this group
+    if (req.user?.role === 'team_lead') {
+      const User = require('../models/User');
+      const Group = require('../models/Group');
+
+      const user = await User.findById(req.user.id).populate('groups');
+      const group = await Group.findById(req.params.id);
+
+      if (!group) {
+        return res.status(404).json({ success: false, message: 'Group not found' });
+      }
+
+      // Check if team lead is a member of this group or its parent
+      const isMemberOfGroup = user.groups?.some(g =>
+        g._id.toString() === req.params.id ||
+        g._id.toString() === group.parentGroupId?.toString()
+      );
+
+      if (!isMemberOfGroup) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only update your own groups'
+        });
+      }
+
+      return next();
+    }
+
+    // For other roles, check admin:manage permission
+    return checkPermission('admin', 'manage')(req, res, next);
+  } catch (error) {
+    console.error('Update group authorization error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking authorization',
+      error: error.message
+    });
   }
-  return checkPermission('admin', 'manage')(req, res, next);
 }, [
   body('displayName').optional().trim().isLength({ min: 2 }),
   body('description').optional().trim(),
@@ -300,12 +386,51 @@ router.put('/groups/:id', (req, res, next) => {
   body('defaultRole').optional().isMongoId()
 ], adminController.updateGroup);
 
-// Delete group - requires admin manage permission or super admin
-router.delete('/groups/:id', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
-    return next();
+// Delete group - allows team leads to delete their own groups
+router.delete('/groups/:id', async (req, res, next) => {
+  try {
+    if (['super_admin', 'admin'].includes(req.user?.role)) {
+      return next();
+    }
+
+    // For team leads, check if they are a member of this group
+    if (req.user?.role === 'team_lead') {
+      const User = require('../models/User');
+      const Group = require('../models/Group');
+
+      const user = await User.findById(req.user.id).populate('groups');
+      const group = await Group.findById(req.params.id);
+
+      if (!group) {
+        return res.status(404).json({ success: false, message: 'Group not found' });
+      }
+
+      // Check if team lead is a member of this group or its parent
+      const isMemberOfGroup = user.groups?.some(g =>
+        g._id.toString() === req.params.id ||
+        g._id.toString() === group.parentGroupId?.toString()
+      );
+
+      if (!isMemberOfGroup) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only delete your own groups'
+        });
+      }
+
+      return next();
+    }
+
+    // For other roles, check admin:manage permission
+    return checkPermission('admin', 'manage')(req, res, next);
+  } catch (error) {
+    console.error('Delete group authorization error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking authorization',
+      error: error.message
+    });
   }
-  return checkPermission('admin', 'manage')(req, res, next);
 }, adminController.deleteGroup);
 
 // Add user to group - allows team leads to add to their own sub-groups
