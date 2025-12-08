@@ -637,13 +637,23 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
       });
     }
 
+    // Validate and round withdrawal amount to 2 decimal places
+    const validatedAmount = Math.round(withdrawalAmount * 100) / 100;
+    if (!isFinite(validatedAmount) || validatedAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid withdrawal amount calculated',
+        details: { withdrawalAmount, validatedAmount }
+      });
+    }
+
     // Create PENDING withdrawal request (requires admin approval)
     const WithdrawalRequest = require('../models/WithdrawalRequest');
     const withdrawalRequest = new WithdrawalRequest({
       userId: req.user.id,
       propertyId: investment.property._id,
       investmentId: investment._id,
-      amount: withdrawalAmount,
+      amount: validatedAmount,
       principalAmount: principalAmount,
       rentalYieldEarned: totalRentalYield,
       reason: `Investment withdrawal - ${isEarlyWithdrawal ? 'Early (with penalty)' : 'After maturity'}`,
