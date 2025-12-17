@@ -348,12 +348,12 @@ async investInProperty(req, res) {
         status: 'confirmed'
       });
 
-      // Update user's wallet (using net investment amount after fees)
+      // Update user's wallet (using original investment amount, not net)
       user.wallet.totalUnitsOwned = (user.wallet.totalUnitsOwned || 0) + requestedUnits;
-      user.wallet.totalInvested = (user.wallet.totalInvested || 0) + netInvestmentAmount;
+      user.wallet.totalInvested = (user.wallet.totalInvested || 0) + totalAmount;
 
-      // Update investment summary (using net investment amount after fees)
-      user.investmentSummary.totalInvested = (user.investmentSummary.totalInvested || 0) + netInvestmentAmount;
+      // Update investment summary (using original investment amount, not net)
+      user.investmentSummary.totalInvested = (user.investmentSummary.totalInvested || 0) + totalAmount;
       user.investmentSummary.lastInvestmentDate = new Date();
 
       // Save investment first
