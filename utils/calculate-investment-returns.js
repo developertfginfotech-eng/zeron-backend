@@ -11,8 +11,8 @@ function calculateInvestmentReturns(investment) {
   const investmentDate = new Date(investment.createdAt);
   const maturityDate = investment.maturityDate ? new Date(investment.maturityDate) : null;
 
-  // Get principal amount (user's actual investment)
-  const principalAmount = investment.managementFee?.netInvestment || investment.amount;
+  // Get principal amount (user's actual investment - always use the original amount, not net after fees)
+  const principalAmount = investment.amount;
 
   // Get management fee percentage (from investment or property settings)
   const managementFeePercentage = investment.managementFee?.feePercentage || 0;
