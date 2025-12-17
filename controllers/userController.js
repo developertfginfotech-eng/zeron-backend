@@ -301,7 +301,11 @@ class UserController {
 
       const { id } = req.params;
 
-      if (req.user.id !== id && !['admin', 'super_admin'].includes(req.user.role)) {
+      // Compare user IDs as strings (handle both ObjectId and string formats)
+      const requestingUserId = req.user.id.toString();
+      const targetUserId = id.toString();
+
+      if (requestingUserId !== targetUserId && !['admin', 'super_admin'].includes(req.user.role)) {
         return res.status(403).json({
           success: false,
           message: 'Access denied'
