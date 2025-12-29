@@ -41,7 +41,6 @@ const groupSchema = new mongoose.Schema({
         // KYC Department
         'kyc',
         'kyc:verification',
-        'kyc:approval',
         'kyc:documents',
 
         // Finance Department
@@ -129,7 +128,6 @@ const groupSchema = new mongoose.Schema({
           // KYC Department
           'kyc',
           'kyc:verification',
-          'kyc:approval',
           'kyc:documents',
 
           // Finance Department
@@ -237,7 +235,6 @@ const groupSchema = new mongoose.Schema({
       enum: [
         'kyc',
         'kyc:verification',
-        'kyc:approval',
         'kyc:documents',
         'finance',
         'finance:reports',

@@ -297,14 +297,14 @@ const checkKycPermission = async (req, res, next) => {
     }
 
     // Check if user has the required permission for this specific action
-    const hasPermission = await user.hasPermission('kyc:approval', requiredAction);
+    const hasPermission = await user.hasPermission('kyc:verification', requiredAction);
 
     if (!hasPermission) {
       return res.status(403).json({
         success: false,
         message: `You don't have permission to ${requiredAction} KYC status`,
         required: {
-          resource: 'kyc:approval',
+          resource: 'kyc:verification',
           action: requiredAction
         }
       });
