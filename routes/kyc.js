@@ -14,21 +14,24 @@ const checkKYCViewPermission = async (req, res, next) => {
       return next();
     }
 
-    // For all other roles, check if user has kyc:documents permission in their groups
+    // For all other roles, check if user has KYC view permission in their groups
     const user = await User.findById(req.user.id).populate('groups');
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'User not found' });
     }
 
-    // Check if user has kyc:documents permission
-    const hasKYCPermission = await user.hasPermission('kyc:documents', 'view');
+    // Check if user has any of these permissions: kyc:documents, kyc:verification, or kyc:approval
+    const hasKYCPermission =
+      (await user.hasPermission('kyc:documents', 'view')) ||
+      (await user.hasPermission('kyc:verification', 'view')) ||
+      (await user.hasPermission('kyc:approval', 'view'));
 
     if (!hasKYCPermission) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to access KYC documents',
-        required: { resource: 'kyc:documents', action: 'view' }
+        required: { resources: ['kyc:documents', 'kyc:verification', 'kyc:approval'], action: 'view' }
       });
     }
 
@@ -51,27 +54,35 @@ const checkKYCApprovalPermission = async (req, res, next) => {
       return next();
     }
 
-    // For all other roles, check if user has kyc:approval permission in their groups
+    // For all other roles, check if user has kyc approval permission in their groups
     const user = await User.findById(req.user.id).populate('groups');
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'User not found' });
     }
 
-    // Check if user has kyc:approval permission with edit, approve, or reject action
+    // Check if user has approval permission from any KYC resource (kyc:approval or kyc:verification)
     const permissions = await user.getPermissions();
     const kycApprovalPerms = permissions.find(p => p.resource === 'kyc:approval');
-    const hasApprovalPermission = kycApprovalPerms && (
-      kycApprovalPerms.actions.includes('edit') ||
-      kycApprovalPerms.actions.includes('approve') ||
-      kycApprovalPerms.actions.includes('reject')
-    );
+    const kycVerificationPerms = permissions.find(p => p.resource === 'kyc:verification');
+
+    const hasApprovalPermission =
+      (kycApprovalPerms && (
+        kycApprovalPerms.actions.includes('edit') ||
+        kycApprovalPerms.actions.includes('approve') ||
+        kycApprovalPerms.actions.includes('reject')
+      )) ||
+      (kycVerificationPerms && (
+        kycVerificationPerms.actions.includes('edit') ||
+        kycVerificationPerms.actions.includes('approve') ||
+        kycVerificationPerms.actions.includes('reject')
+      ));
 
     if (!hasApprovalPermission) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to approve KYC applications',
-        required: { resource: 'kyc:approval', action: 'edit, approve, or reject' }
+        required: { resources: ['kyc:approval', 'kyc:verification'], action: 'edit, approve, or reject' }
       });
     }
 

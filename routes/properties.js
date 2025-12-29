@@ -115,13 +115,29 @@ router.post('/:id/invest',
 // PATCH /api/properties/:id/deactivate - Deactivate property (requires properties edit permission)
 router.patch('/:id/deactivate',
   authenticate,
-  (req, res, next) => {
+  async (req, res, next) => {
     // Only super_admin bypasses permission check
     if (req.user?.role === 'super_admin') {
       return next();
     }
-    // All other users (including admin) must have permission from their groups
-    return checkPermission('properties', 'edit')(req, res, next);
+
+    // All other users must have edit permission from either 'properties' or 'properties:manage'
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id).populate('groups');
+
+    const hasPermission =
+      (await user.hasPermission('properties', 'edit')) ||
+      (await user.hasPermission('properties:manage', 'edit'));
+
+    if (hasPermission) {
+      return next();
+    }
+
+    return res.status(403).json({
+      success: false,
+      message: "You don't have permission to edit properties",
+      required: { resources: ['properties', 'properties:manage'], action: 'edit' }
+    });
   },
   param('id').isMongoId().withMessage('Invalid property ID'),
   body('reason').optional().trim(),
@@ -132,13 +148,29 @@ router.patch('/:id/deactivate',
 // PATCH /api/properties/:id/activate - Reactivate property (requires properties edit permission)
 router.patch('/:id/activate',
   authenticate,
-  (req, res, next) => {
+  async (req, res, next) => {
     // Only super_admin bypasses permission check
     if (req.user?.role === 'super_admin') {
       return next();
     }
-    // All other users (including admin) must have permission from their groups
-    return checkPermission('properties', 'edit')(req, res, next);
+
+    // All other users must have edit permission from either 'properties' or 'properties:manage'
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id).populate('groups');
+
+    const hasPermission =
+      (await user.hasPermission('properties', 'edit')) ||
+      (await user.hasPermission('properties:manage', 'edit'));
+
+    if (hasPermission) {
+      return next();
+    }
+
+    return res.status(403).json({
+      success: false,
+      message: "You don't have permission to edit properties",
+      required: { resources: ['properties', 'properties:manage'], action: 'edit' }
+    });
   },
   param('id').isMongoId().withMessage('Invalid property ID'),
   propertyController.activateProperty
