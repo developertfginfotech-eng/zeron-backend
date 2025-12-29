@@ -638,8 +638,11 @@ router.put('/groups/:groupId/members/:userId/permissions', async (req, res, next
 // Get all users with their roles and groups
 router.get('/rbac/users', requireSuperAdmin, adminController.getUsersWithRBAC);
 
-// Get user's effective permissions
+// Get user's effective permissions (super admin can check any user)
 router.get('/users/:userId/permissions', requireSuperAdmin, adminController.getUserPermissions);
+
+// Get current user's own permissions (any authenticated user)
+router.get('/my-permissions', authenticate, adminController.getMyPermissions);
 
 // Initialize default roles (one-time setup)
 router.post('/rbac/initialize', requireSuperAdmin, adminController.initializeDefaultRoles);

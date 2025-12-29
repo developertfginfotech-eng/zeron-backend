@@ -4384,6 +4384,43 @@ async createProperty(req, res) {
     }
   }
 
+  async getMyPermissions(req, res) {
+    try {
+      const user = await User.findById(req.user.id)
+        .populate('assignedRole', 'name displayName permissions')
+        .populate('groups', 'name displayName permissions');
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      const permissions = await user.getPermissions();
+
+      res.json({
+        success: true,
+        data: {
+          userId: user._id,
+          userName: `${user.firstName} ${user.lastName}`,
+          email: user.email,
+          role: user.role,
+          assignedRole: user.assignedRole,
+          groups: user.groups,
+          effectivePermissions: permissions
+        }
+      });
+    } catch (error) {
+      logger.error('Get my permissions error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching your permissions',
+        error: error.message
+      });
+    }
+  }
+
   async initializeDefaultRoles(req, res) {
     try {
       const Role = require('../models/Role');
