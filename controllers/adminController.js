@@ -420,7 +420,8 @@ class AdminController {
         });
       }
 
-      const { adminId, approved } = req.body;
+      const { approved } = req.body;
+      const adminId = req.params.id || req.body.adminId; // Support both URL param and body
 
       const admin = await User.findById(adminId);
 
