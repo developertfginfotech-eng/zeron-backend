@@ -3923,7 +3923,7 @@ async createProperty(req, res) {
         });
       }
 
-      const { name, displayName, description, department, permissions, defaultRole, parentGroupId, overriddenPermissions } = req.body;
+      const { name, displayName, description, department, permissions, defaultRole, parentGroupId, overriddenPermissions, groupAdminId } = req.body;
 
       // Check if group with this name already exists
       const existingGroup = await Group.findOne({ name: name.toLowerCase().replace(/\s+/g, '_') });
@@ -3946,6 +3946,23 @@ async createProperty(req, res) {
         }
       }
 
+      // If groupAdminId is provided, verify the admin user exists and is an admin
+      if (groupAdminId) {
+        const adminUser = await User.findById(groupAdminId);
+        if (!adminUser) {
+          return res.status(404).json({
+            success: false,
+            message: 'Admin user not found'
+          });
+        }
+        if (adminUser.role !== 'admin') {
+          return res.status(400).json({
+            success: false,
+            message: 'Selected user must have admin role'
+          });
+        }
+      }
+
       const group = await Group.create({
         name: name.toLowerCase().replace(/\s+/g, '_'),
         displayName,
@@ -3957,6 +3974,24 @@ async createProperty(req, res) {
         parentGroupId: parentGroupId || null,
         overriddenPermissions: overriddenPermissions || []
       });
+
+      // If groupAdminId is provided, add the admin to the group with all permissions
+      if (groupAdminId) {
+        group.members.push({
+          userId: groupAdminId,
+          memberPermissions: permissions, // Give admin all group permissions
+          addedBy: req.user.id
+        });
+        await group.save();
+
+        // Add group to admin user's groups array
+        await User.findByIdAndUpdate(
+          groupAdminId,
+          { $addToSet: { groups: group._id } }
+        );
+
+        logger.info(`Admin assigned to group - Admin: ${groupAdminId}, Group: ${group.name}`);
+      }
 
       logger.info(`Admin created group - Admin: ${req.user.id}, Group: ${group.name}`);
 
