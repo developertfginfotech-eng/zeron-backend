@@ -3838,12 +3838,19 @@ async createProperty(req, res) {
       // Super admins can see all groups
       if (admin && admin.role !== 'super_admin') {
         // Get user's group membership
-        const userGroupIds = await Group.find({
+        const userGroups = await Group.find({
           'members.userId': req.user.id
-        }).select('_id');
+        }).select('_id parentGroupId');
 
-        const groupIds = userGroupIds.map(g => g._id);
-        groupQuery = groupQuery.where('_id').in(groupIds);
+        const groupIds = userGroups.map(g => g._id);
+
+        // Also include parent groups of subgroups the user is a member of
+        const parentGroupIds = userGroups
+          .filter(g => g.parentGroupId)
+          .map(g => g.parentGroupId);
+
+        const allGroupIds = [...new Set([...groupIds, ...parentGroupIds])];
+        groupQuery = groupQuery.where('_id').in(allGroupIds);
       }
 
       const groups = await groupQuery
