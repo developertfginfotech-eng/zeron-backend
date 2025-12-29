@@ -363,7 +363,8 @@ router.post('/groups', async (req, res, next) => {
   body('permissions').isArray().withMessage('Permissions must be an array'),
   body('defaultRole').optional().isMongoId().withMessage('Valid role ID required'),
   body('parentGroupId').optional().isMongoId().withMessage('Valid parent group ID required'),
-  body('overriddenPermissions').optional().isArray().withMessage('Overridden permissions must be an array')
+  body('overriddenPermissions').optional().isArray().withMessage('Overridden permissions must be an array'),
+  body('groupAdminId').optional().isMongoId().withMessage('Valid admin user ID required')
 ], adminController.createGroup);
 
 // Update group - allows team leads to update their own groups
