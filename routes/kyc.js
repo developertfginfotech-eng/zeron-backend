@@ -69,28 +69,53 @@ const checkKYCApprovalPermission = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'User not found' });
     }
 
-    // Check if user has approval permission from any KYC resource (kyc:approval or kyc:verification)
+    // Get the status being set to determine required permission
+    const { status } = req.body;
+
+    // Check if user has the specific permission based on the action
     const permissions = await user.getPermissions();
     const kycApprovalPerms = permissions.find(p => p.resource === 'kyc:approval');
     const kycVerificationPerms = permissions.find(p => p.resource === 'kyc:verification');
 
-    const hasApprovalPermission =
-      (kycApprovalPerms && (
-        kycApprovalPerms.actions.includes('edit') ||
-        kycApprovalPerms.actions.includes('approve') ||
-        kycApprovalPerms.actions.includes('reject')
-      )) ||
-      (kycVerificationPerms && (
-        kycVerificationPerms.actions.includes('edit') ||
-        kycVerificationPerms.actions.includes('approve') ||
-        kycVerificationPerms.actions.includes('reject')
-      ));
+    let hasRequiredPermission = false;
+    let requiredAction = '';
 
-    if (!hasApprovalPermission) {
+    // Determine required permission based on status
+    if (status === 'approved') {
+      requiredAction = 'approve';
+      hasRequiredPermission =
+        (kycApprovalPerms && (
+          kycApprovalPerms.actions.includes('edit') ||
+          kycApprovalPerms.actions.includes('approve')
+        )) ||
+        (kycVerificationPerms && (
+          kycVerificationPerms.actions.includes('edit') ||
+          kycVerificationPerms.actions.includes('approve')
+        ));
+    } else if (status === 'rejected') {
+      requiredAction = 'reject';
+      hasRequiredPermission =
+        (kycApprovalPerms && (
+          kycApprovalPerms.actions.includes('edit') ||
+          kycApprovalPerms.actions.includes('reject')
+        )) ||
+        (kycVerificationPerms && (
+          kycVerificationPerms.actions.includes('edit') ||
+          kycVerificationPerms.actions.includes('reject')
+        ));
+    } else {
+      // For other statuses (under_review, pending), require edit permission
+      requiredAction = 'edit';
+      hasRequiredPermission =
+        (kycApprovalPerms && kycApprovalPerms.actions.includes('edit')) ||
+        (kycVerificationPerms && kycVerificationPerms.actions.includes('edit'));
+    }
+
+    if (!hasRequiredPermission) {
       return res.status(403).json({
         success: false,
-        message: 'You do not have permission to approve KYC applications',
-        required: { resources: ['kyc:approval', 'kyc:verification'], action: 'edit, approve, or reject' }
+        message: `You do not have permission to ${requiredAction} KYC applications`,
+        required: { resources: ['kyc:approval', 'kyc:verification'], action: requiredAction }
       });
     }
 
