@@ -3977,12 +3977,7 @@ async createProperty(req, res) {
 
       // If groupAdminId is provided, add the admin to the group with all permissions
       if (groupAdminId) {
-        group.members.push({
-          userId: groupAdminId,
-          memberPermissions: permissions, // Give admin all group permissions
-          addedBy: req.user.id
-        });
-        await group.save();
+        await group.addMember(groupAdminId, permissions, req.user.id);
 
         // Add group to admin user's groups array
         await User.findByIdAndUpdate(
