@@ -203,28 +203,10 @@ const checkWithdrawalPermission = async (req, res, next) => {
       });
     }
 
-    // Super admin can approve any withdrawal
+    // Only super admin can approve any withdrawal without permission check
     if (user.role === 'super_admin') {
       req.user = user;
       return next();
-    }
-
-    // Admin can approve any withdrawal
-    if (user.role === 'admin') {
-      req.user = user;
-      return next();
-    }
-
-    // Get withdrawal request ID from params
-    const { withdrawalId } = req.params;
-    const WithdrawalRequest = require('../models/WithdrawalRequest');
-    const withdrawal = await WithdrawalRequest.findById(withdrawalId).populate('groupId');
-
-    if (!withdrawal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Withdrawal request not found'
-      });
     }
 
     // Get the action from request body
@@ -237,61 +219,23 @@ const checkWithdrawalPermission = async (req, res, next) => {
       });
     }
 
-    // For team leads - check if they are members of the withdrawal's group
-    if (user.role === 'team_lead') {
-      // Team leads can manage withdrawals from their assigned groups
-      const isPartOfGroup = user.groups?.some(g =>
-        g._id.toString() === withdrawal.groupId?.toString()
-      );
+    // For all other users (admin, team_lead, team_member), check if they have permission from their groups
+    const requiredAction = action === 'approve' ? 'approve' : 'reject';
+    const hasPermission = await user.hasPermission('withdrawals', requiredAction);
 
-      if (!isPartOfGroup) {
-        return res.status(403).json({
-          success: false,
-          message: 'Team leads can only manage withdrawals from their own groups'
-        });
-      }
-
-      req.user = user;
-      return next();
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message: `You don't have permission to ${requiredAction} withdrawal requests`,
+        required: {
+          resource: 'withdrawals',
+          action: requiredAction
+        }
+      });
     }
 
-    // For team members - check if they have withdrawal approval permission in their group
-    if (user.role === 'team_member') {
-      const isPartOfGroup = user.groups?.some(g =>
-        g._id.toString() === withdrawal.groupId?.toString()
-      );
-
-      if (!isPartOfGroup) {
-        return res.status(403).json({
-          success: false,
-          message: 'Team members can only manage withdrawals from their own groups'
-        });
-      }
-
-      // Check if they have the required permission
-      const requiredAction = action === 'approve' ? 'approve' : 'reject';
-      const hasPermission = await user.hasPermission('withdrawals', requiredAction);
-
-      if (!hasPermission) {
-        return res.status(403).json({
-          success: false,
-          message: `You don't have permission to ${requiredAction} withdrawal requests`,
-          required: {
-            resource: 'withdrawals',
-            action: requiredAction
-          }
-        });
-      }
-
-      req.user = user;
-      return next();
-    }
-
-    // For other roles, deny access
-    return res.status(403).json({
-      success: false,
-      message: 'Only admins and team leads can approve withdrawal requests'
-    });
+    req.user = user;
+    return next();
   } catch (error) {
     console.error('Withdrawal permission check error:', error);
     res.status(500).json({

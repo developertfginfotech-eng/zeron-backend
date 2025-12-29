@@ -116,9 +116,11 @@ router.post('/:id/invest',
 router.patch('/:id/deactivate',
   authenticate,
   (req, res, next) => {
-    if (['super_admin', 'admin'].includes(req.user?.role)) {
+    // Only super_admin bypasses permission check
+    if (req.user?.role === 'super_admin') {
       return next();
     }
+    // All other users (including admin) must have permission from their groups
     return checkPermission('properties', 'edit')(req, res, next);
   },
   param('id').isMongoId().withMessage('Invalid property ID'),
@@ -131,9 +133,11 @@ router.patch('/:id/deactivate',
 router.patch('/:id/activate',
   authenticate,
   (req, res, next) => {
-    if (['super_admin', 'admin'].includes(req.user?.role)) {
+    // Only super_admin bypasses permission check
+    if (req.user?.role === 'super_admin') {
       return next();
     }
+    // All other users (including admin) must have permission from their groups
     return checkPermission('properties', 'edit')(req, res, next);
   },
   param('id').isMongoId().withMessage('Invalid property ID'),
