@@ -288,7 +288,8 @@ router.delete('/users/:userId/remove-role', requireSuperAdmin, adminController.r
 
 // Get all groups - requires admin permission or super admin
 router.get('/groups', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
+  // Allow super_admin, admin, and team_lead to view groups
+  if (['super_admin', 'admin', 'team_lead'].includes(req.user?.role)) {
     return next();
   }
   return checkPermission('admin', 'view')(req, res, next);
@@ -296,7 +297,8 @@ router.get('/groups', (req, res, next) => {
 
 // Get specific group by ID with members - requires admin permission or super admin
 router.get('/groups/:id', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
+  // Allow super_admin, admin, and team_lead to view group details
+  if (['super_admin', 'admin', 'team_lead'].includes(req.user?.role)) {
     return next();
   }
   return checkPermission('admin', 'view')(req, res, next);
