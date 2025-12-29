@@ -179,19 +179,53 @@ router.post('/properties', (req, res, next) => {
 }, ...cloudinaryUpload.single('image'), adminController.createProperty);
 
 // Update property (requires properties edit permission or super admin)
-router.patch('/properties/:id', (req, res, next) => {
+router.patch('/properties/:id', async (req, res, next) => {
   if (req.user?.role === 'super_admin') {
     return next();
   }
-  return checkPermission('properties', 'edit')(req, res, next);
+
+  // Check if user has edit permission from either 'properties' or 'properties:manage' resource
+  const User = require('../models/User');
+  const user = await User.findById(req.user.id).populate('groups');
+
+  const hasPermission =
+    (await user.hasPermission('properties', 'edit')) ||
+    (await user.hasPermission('properties:manage', 'edit'));
+
+  if (hasPermission) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: "You don't have permission to edit properties",
+    required: { resources: ['properties', 'properties:manage'], action: 'edit' }
+  });
 }, ...cloudinaryUpload.single('image'), adminController.updateProperty);
 
 // Delete property (requires properties delete permission or super admin)
-router.delete('/properties/:id', (req, res, next) => {
+router.delete('/properties/:id', async (req, res, next) => {
   if (req.user?.role === 'super_admin') {
     return next();
   }
-  return checkPermission('properties', 'delete')(req, res, next);
+
+  // Check if user has delete permission from either 'properties' or 'properties:manage' resource
+  const User = require('../models/User');
+  const user = await User.findById(req.user.id).populate('groups');
+
+  const hasPermission =
+    (await user.hasPermission('properties', 'delete')) ||
+    (await user.hasPermission('properties:manage', 'delete'));
+
+  if (hasPermission) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: "You don't have permission to delete properties",
+    required: { resources: ['properties', 'properties:manage'], action: 'delete' }
+  });
 }, adminController.deleteProperty);
 
 // ========== DASHBOARD AND REPORTS ==========
