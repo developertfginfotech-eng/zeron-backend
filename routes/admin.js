@@ -50,6 +50,39 @@ router.post('/admin-users', requireSuperAdmin, [
   body('position').optional().trim()
 ], adminController.createAdminUser);
 
+// ========== OTP ENDPOINTS FOR ADMIN CREATION AND ROLE CHANGE ==========
+
+// Request OTP for admin creation (admin/team lead creating users)
+router.post('/admin-users/request-otp', authenticate, [
+  body('action').isIn(['create_admin']).withMessage('Invalid action'),
+  body('adminData').isObject().withMessage('Admin data required'),
+  body('adminData.firstName').trim().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
+  body('adminData.lastName').trim().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
+  body('adminData.email').isEmail().withMessage('Valid email required'),
+  body('adminData.password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('adminData.role').isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer', 'team_lead', 'team_member']).withMessage('Invalid role')
+], adminController.requestAdminCreationOTP);
+
+// Verify OTP and create admin (or create pending registration)
+router.post('/admin-users/verify-otp', authenticate, [
+  body('adminData').isObject().withMessage('Admin data required'),
+  body('otp').trim().notEmpty().withMessage('OTP required'),
+  body('createPending').isBoolean().withMessage('createPending must be boolean')
+], adminController.verifyAdminCreationOTP);
+
+// Request OTP for role change (admin/team lead changing roles)
+router.post('/admin-users/request-role-change-otp', authenticate, [
+  body('adminId').trim().notEmpty().withMessage('Admin ID required'),
+  body('newRole').isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer', 'team_lead', 'team_member']).withMessage('Invalid role')
+], adminController.requestRoleChangeOTP);
+
+// Verify OTP and change role
+router.post('/admin-users/verify-role-change-otp', authenticate, [
+  body('adminId').trim().notEmpty().withMessage('Admin ID required'),
+  body('newRole').isIn(['admin', 'kyc_officer', 'property_manager', 'financial_analyst', 'compliance_officer', 'team_lead', 'team_member']).withMessage('Invalid role'),
+  body('otp').trim().notEmpty().withMessage('OTP required')
+], adminController.verifyRoleChangeOTP);
+
 // ========== ADMIN USER MANAGEMENT ROUTES ==========
 
 // Get all admin users - super admin only
