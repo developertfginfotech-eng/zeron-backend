@@ -14,24 +14,32 @@ const checkKYCViewPermission = async (req, res, next) => {
       return next();
     }
 
-    // For all other roles, check if user has KYC view permission in their groups
+    // For all other roles, check if user has KYC permission in their groups
     const user = await User.findById(req.user.id).populate('groups');
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'User not found' });
     }
 
-    // Check if user has any of these permissions: kyc:documents, kyc:verification, or kyc:approval
+    // Check if user has view, approve, or reject permission
+    // (Users need to view applications to approve/reject them)
     const hasKYCPermission =
       (await user.hasPermission('kyc:documents', 'view')) ||
       (await user.hasPermission('kyc:verification', 'view')) ||
-      (await user.hasPermission('kyc:approval', 'view'));
+      (await user.hasPermission('kyc:approval', 'view')) ||
+      (await user.hasPermission('kyc:verification', 'approve')) ||
+      (await user.hasPermission('kyc:verification', 'reject')) ||
+      (await user.hasPermission('kyc:approval', 'approve')) ||
+      (await user.hasPermission('kyc:approval', 'reject'));
 
     if (!hasKYCPermission) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to access KYC documents',
-        required: { resources: ['kyc:documents', 'kyc:verification', 'kyc:approval'], action: 'view' }
+        required: {
+          resources: ['kyc:documents', 'kyc:verification', 'kyc:approval'],
+          actions: ['view', 'approve', 'or reject']
+        }
       });
     }
 
