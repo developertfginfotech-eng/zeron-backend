@@ -85,12 +85,20 @@ router.post('/admin-users/verify-role-change-otp', authenticate, [
 
 // ========== ADMIN USER MANAGEMENT ROUTES ==========
 
-// Get all admin users - super admin only
-router.get('/admin-users', requireSuperAdmin, adminController.getAdminUsers);
+// Get all admin users - allow super_admin, admin, and team_lead
+router.get('/admin-users', (req, res, next) => {
+  if (['super_admin', 'admin', 'team_lead'].includes(req.user?.role)) {
+    return next();
+  }
+  return res.status(403).json({
+    success: false,
+    message: 'Super admin access required'
+  });
+}, adminController.getAdminUsers);
 
-// Get all regular users - requires user management permission or super admin
+// Get all regular users - allow super_admin, admin, and team_lead
 router.get('/all-users', (req, res, next) => {
-  if (req.user?.role === 'super_admin') {
+  if (['super_admin', 'admin', 'team_lead'].includes(req.user?.role)) {
     return next();
   }
   return checkPermission('users', 'view')(req, res, next);
@@ -252,8 +260,16 @@ router.get('/reports/earnings', (req, res, next) => {
 
 // ========== RBAC - ROLE MANAGEMENT ROUTES (Super Admin Only) ==========
 
-// Get all roles
-router.get('/roles', requireSuperAdmin, adminController.getRoles);
+// Get all roles - allow super_admin, admin, and team_lead to view roles
+router.get('/roles', (req, res, next) => {
+  if (['super_admin', 'admin', 'team_lead'].includes(req.user?.role)) {
+    return next();
+  }
+  return res.status(403).json({
+    success: false,
+    message: 'Super admin access required'
+  });
+}, adminController.getRoles);
 
 // Get specific role by ID
 router.get('/roles/:id', requireSuperAdmin, adminController.getRoleById);
