@@ -116,7 +116,7 @@ router.post('/:id/invest',
 router.patch('/:id/deactivate',
   authenticate,
   (req, res, next) => {
-    if (req.user?.role === 'super_admin') {
+    if (['super_admin', 'admin'].includes(req.user?.role)) {
       return next();
     }
     return checkPermission('properties', 'edit')(req, res, next);
@@ -131,7 +131,7 @@ router.patch('/:id/deactivate',
 router.patch('/:id/activate',
   authenticate,
   (req, res, next) => {
-    if (req.user?.role === 'super_admin') {
+    if (['super_admin', 'admin'].includes(req.user?.role)) {
       return next();
     }
     return checkPermission('properties', 'edit')(req, res, next);
