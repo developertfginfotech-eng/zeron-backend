@@ -4926,5 +4926,286 @@ async createProperty(req, res) {
     }
   }
 
+  // ========== OTP ENDPOINTS FOR ADMIN CREATION ==========
+
+  /**
+   * Request OTP for admin creation
+   * Used when admin/team lead wants to create a new admin user
+   */
+  async requestAdminCreationOTP(req, res) {
+    try {
+      const { adminData, action } = req.body;
+      const currentUser = await User.findById(req.user.id);
+
+      if (!currentUser) {
+        return res.status(404).json({
+          success: false,
+          message: 'Current user not found'
+        });
+      }
+
+      // Find super admin to send OTP to
+      const superAdmin = await User.findOne({ role: 'super_admin' });
+      if (!superAdmin) {
+        return res.status(500).json({
+          success: false,
+          message: 'Super admin not found in system'
+        });
+      }
+
+      // Generate and send OTP
+      const emailResult = await otpEmailService.sendOTP({
+        operation: 'create_admin',
+        propertyData: {
+          title: `Create ${adminData.role}: ${adminData.firstName} ${adminData.lastName}`,
+          adminData: {
+            firstName: adminData.firstName,
+            lastName: adminData.lastName,
+            email: adminData.email,
+            role: adminData.role
+          }
+        },
+        adminUser: currentUser
+      });
+
+      logger.info(`Admin creation OTP requested - Requester: ${req.user.id}, Role: ${adminData.role}`);
+
+      res.json({
+        success: true,
+        message: 'OTP sent to Super Admin\'s email',
+        data: {
+          otpId: emailResult.otpId,
+          sentTo: emailResult.fallbackMode ? 'console-log' : emailResult.sentTo
+        }
+      });
+    } catch (error) {
+      logger.error('Request admin creation OTP error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error requesting OTP',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Verify OTP and create admin user or pending registration
+   */
+  async verifyAdminCreationOTP(req, res) {
+    try {
+      const { adminData, otp, createPending } = req.body;
+      const currentUserId = req.user.id;
+
+      // Verify OTP
+      const verification = await otpEmailService.verifyOTP(currentUserId, otp, 'create_admin');
+      if (!verification.valid) {
+        return res.status(400).json({
+          success: false,
+          message: verification.reason || 'Invalid OTP',
+          attemptsRemaining: verification.attemptsRemaining
+        });
+      }
+
+      // Check if email already exists
+      const existingUser = await User.findOne({ email: adminData.email });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'User with this email already exists'
+        });
+      }
+
+      if (createPending) {
+        // Create pending registration (requires super admin approval)
+        const pendingUser = new User({
+          firstName: adminData.firstName,
+          lastName: adminData.lastName,
+          email: adminData.email,
+          phone: adminData.phone,
+          position: adminData.position,
+          password: adminData.password,
+          role: adminData.role,
+          status: 'pending_verification',
+          isEmailVerified: false,
+          createdBy: currentUserId
+        });
+
+        await pendingUser.save();
+
+        logger.info(`Pending admin created - Email: ${adminData.email}, Role: ${adminData.role}, Created by: ${currentUserId}`);
+
+        res.json({
+          success: true,
+          message: 'Pending registration created successfully. Awaiting Super Admin approval.',
+          data: {
+            userId: pendingUser._id,
+            email: pendingUser.email,
+            role: pendingUser.role,
+            status: pendingUser.status
+          }
+        });
+      } else {
+        // Super admin - create active user immediately
+        const newUser = new User({
+          firstName: adminData.firstName,
+          lastName: adminData.lastName,
+          email: adminData.email,
+          phone: adminData.phone,
+          position: adminData.position,
+          password: adminData.password,
+          role: adminData.role,
+          status: 'active',
+          isEmailVerified: true,
+          createdBy: currentUserId
+        });
+
+        await newUser.save();
+
+        // Add to groups if specified
+        if (adminData.groupIds && adminData.groupIds.length > 0) {
+          await Promise.all(
+            adminData.groupIds.map(groupId =>
+              Group.findByIdAndUpdate(
+                groupId,
+                { $addToSet: { members: { userId: newUser._id } } },
+                { new: true }
+              )
+            )
+          );
+        }
+
+        logger.info(`Admin user created immediately - Email: ${adminData.email}, Role: ${adminData.role}, Created by: ${currentUserId}`);
+
+        res.json({
+          success: true,
+          message: 'Admin user created successfully',
+          data: {
+            userId: newUser._id,
+            email: newUser.email,
+            role: newUser.role,
+            status: newUser.status
+          }
+        });
+      }
+    } catch (error) {
+      logger.error('Verify admin creation OTP error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error verifying OTP and creating admin',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Request OTP for role change
+   * Used when admin/team lead wants to change someone's role
+   */
+  async requestRoleChangeOTP(req, res) {
+    try {
+      const { adminId, newRole } = req.body;
+      const currentUser = await User.findById(req.user.id);
+
+      if (!currentUser) {
+        return res.status(404).json({
+          success: false,
+          message: 'Current user not found'
+        });
+      }
+
+      // Find target admin user
+      const targetUser = await User.findById(adminId);
+      if (!targetUser) {
+        return res.status(404).json({
+          success: false,
+          message: 'Target user not found'
+        });
+      }
+
+      // Generate and send OTP
+      const emailResult = await otpEmailService.sendOTP({
+        operation: 'change_role',
+        propertyData: {
+          title: `Change ${targetUser.firstName} ${targetUser.lastName}'s role to ${newRole}`,
+          currentRole: targetUser.role,
+          newRole: newRole
+        },
+        adminUser: currentUser
+      });
+
+      logger.info(`Role change OTP requested - Requester: ${req.user.id}, Target: ${adminId}, New Role: ${newRole}`);
+
+      res.json({
+        success: true,
+        message: 'OTP sent to Super Admin\'s email',
+        data: {
+          otpId: emailResult.otpId,
+          sentTo: emailResult.fallbackMode ? 'console-log' : emailResult.sentTo
+        }
+      });
+    } catch (error) {
+      logger.error('Request role change OTP error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error requesting OTP',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Verify OTP and change user role
+   */
+  async verifyRoleChangeOTP(req, res) {
+    try {
+      const { adminId, newRole, otp } = req.body;
+      const currentUserId = req.user.id;
+
+      // Verify OTP
+      const verification = await otpEmailService.verifyOTP(currentUserId, otp, 'change_role');
+      if (!verification.valid) {
+        return res.status(400).json({
+          success: false,
+          message: verification.reason || 'Invalid OTP',
+          attemptsRemaining: verification.attemptsRemaining
+        });
+      }
+
+      // Find target user
+      const targetUser = await User.findById(adminId);
+      if (!targetUser) {
+        return res.status(404).json({
+          success: false,
+          message: 'Target user not found'
+        });
+      }
+
+      // Update role
+      const oldRole = targetUser.role;
+      targetUser.role = newRole;
+      await targetUser.save();
+
+      logger.info(`Role changed - User: ${adminId}, Old Role: ${oldRole}, New Role: ${newRole}, Changed by: ${currentUserId}`);
+
+      res.json({
+        success: true,
+        message: 'User role changed successfully',
+        data: {
+          userId: targetUser._id,
+          email: targetUser.email,
+          oldRole: oldRole,
+          newRole: targetUser.role
+        }
+      });
+    } catch (error) {
+      logger.error('Verify role change OTP error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error verifying OTP and changing role',
+        error: error.message
+      });
+    }
+  }
+
 }
 module.exports = new AdminController();
