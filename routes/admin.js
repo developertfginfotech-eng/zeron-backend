@@ -382,7 +382,8 @@ router.post('/groups', async (req, res, next) => {
   body('defaultRole').optional().isMongoId().withMessage('Valid role ID required'),
   body('parentGroupId').optional().isMongoId().withMessage('Valid parent group ID required'),
   body('overriddenPermissions').optional().isArray().withMessage('Overridden permissions must be an array'),
-  body('groupAdminId').optional().isMongoId().withMessage('Valid admin user ID required')
+  body('groupAdminId').optional().isMongoId().withMessage('Valid admin user ID required'),
+  body('teamLeadId').optional().isMongoId().withMessage('Valid team lead user ID required')
 ], adminController.createGroup);
 
 // Update group - allows team leads to update their own groups
