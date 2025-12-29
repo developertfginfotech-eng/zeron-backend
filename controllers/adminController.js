@@ -3923,7 +3923,7 @@ async createProperty(req, res) {
         });
       }
 
-      const { name, displayName, description, department, permissions, defaultRole, parentGroupId, overriddenPermissions, groupAdminId } = req.body;
+      const { name, displayName, description, department, permissions, defaultRole, parentGroupId, overriddenPermissions, groupAdminId, teamLeadId } = req.body;
 
       // Check if group with this name already exists
       const existingGroup = await Group.findOne({ name: name.toLowerCase().replace(/\s+/g, '_') });
@@ -3963,6 +3963,23 @@ async createProperty(req, res) {
         }
       }
 
+      // If teamLeadId is provided, verify the team lead user exists and is a team lead
+      if (teamLeadId) {
+        const teamLeadUser = await User.findById(teamLeadId);
+        if (!teamLeadUser) {
+          return res.status(404).json({
+            success: false,
+            message: 'Team lead user not found'
+          });
+        }
+        if (teamLeadUser.role !== 'team_lead') {
+          return res.status(400).json({
+            success: false,
+            message: 'Selected user must have team_lead role'
+          });
+        }
+      }
+
       const group = await Group.create({
         name: name.toLowerCase().replace(/\s+/g, '_'),
         displayName,
@@ -3975,7 +3992,7 @@ async createProperty(req, res) {
         overriddenPermissions: overriddenPermissions || []
       });
 
-      // If groupAdminId is provided, add the admin to the group with all permissions
+      // If groupAdminId is provided (root group), add the admin to the group with all permissions
       if (groupAdminId) {
         await group.addMember(groupAdminId, permissions, req.user.id);
 
@@ -3986,6 +4003,19 @@ async createProperty(req, res) {
         );
 
         logger.info(`Admin assigned to group - Admin: ${groupAdminId}, Group: ${group.name}`);
+      }
+
+      // If teamLeadId is provided (sub-group), add the team lead to the sub-group with all permissions
+      if (teamLeadId) {
+        await group.addMember(teamLeadId, permissions, req.user.id);
+
+        // Add sub-group to team lead user's groups array
+        await User.findByIdAndUpdate(
+          teamLeadId,
+          { $addToSet: { groups: group._id } }
+        );
+
+        logger.info(`Team Lead assigned to sub-group - Team Lead: ${teamLeadId}, Sub-group: ${group.name}`);
       }
 
       logger.info(`Admin created group - Admin: ${req.user.id}, Group: ${group.name}`);
