@@ -130,8 +130,9 @@ function calculateInvestmentReturns(investment, property, currentDate = new Date
     );
   }
 
-  // Calculate management fees: percentage of principal per year
-  const totalManagementFees = (investmentAmount * managementFeePercentage * yearsSinceInvestment) / 100;
+  // Calculate management fees: percentage of total amount (principal + rental yield)
+  const totalAmountForFee = investmentAmount + rentalYield.netRentalYield;
+  const totalManagementFees = (totalAmountForFee * managementFeePercentage) / 100;
 
   const totalValue = investmentAmount + rentalYield.netRentalYield + appreciation.netAppreciation;
   const totalReturns = rentalYield.netRentalYield + appreciation.netAppreciation;
