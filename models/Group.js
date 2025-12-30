@@ -84,6 +84,12 @@ const groupSchema = new mongoose.Schema({
         'transactions:approve',
         'transactions:dispute',
 
+        // Withdrawals
+        'withdrawals',
+        'withdrawals:view',
+        'withdrawals:approve',
+        'withdrawals:reject',
+
         // Documents & Records
         'documents',
         'documents:upload',
@@ -169,6 +175,12 @@ const groupSchema = new mongoose.Schema({
           'transactions:manage',
           'transactions:approve',
           'transactions:dispute',
+
+          // Withdrawals
+          'withdrawals',
+          'withdrawals:view',
+          'withdrawals:approve',
+          'withdrawals:reject',
 
           // Documents & Records
           'documents',
@@ -272,6 +284,10 @@ const groupSchema = new mongoose.Schema({
         'transactions',
         'transactions:view',
         'transactions:manage',
+        'withdrawals',
+        'withdrawals:view',
+        'withdrawals:approve',
+        'withdrawals:reject',
         'kyc-documents',
         'kyc-documents:upload',
         'kyc-documents:view',
