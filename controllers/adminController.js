@@ -3900,7 +3900,7 @@ async createProperty(req, res) {
         .populate('defaultRole', 'name displayName')
         .populate({
           path: 'members.userId',
-          select: 'firstName lastName email'
+          select: 'firstName lastName email role'
         })
         .select('-__v')
         .sort('displayName')
