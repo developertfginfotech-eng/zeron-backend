@@ -3834,23 +3834,46 @@ async createProperty(req, res) {
       const admin = await User.findById(req.user.id);
       let groupQuery = Group.find();
 
-      // Team leads can only see groups they belong to
-      // Super admins can see all groups
+      // Filter based on role:
+      // - super_admin: see all groups
+      // - admin: see only groups where they are groupAdmin + subgroups of those groups
+      // - team_lead: see only subgroups where they are teamLead
       if (admin && admin.role !== 'super_admin') {
-        // Get user's group membership
-        const userGroups = await Group.find({
-          'members.userId': req.user.id
-        }).select('_id parentGroupId');
+        if (admin.role === 'admin') {
+          // Find root groups where user is the group admin
+          const adminGroups = await Group.find({
+            groupAdminId: req.user.id,
+            parentGroupId: null
+          }).select('_id');
 
-        const groupIds = userGroups.map(g => g._id);
+          const rootGroupIds = adminGroups.map(g => g._id);
 
-        // Also include parent groups of subgroups the user is a member of
-        const parentGroupIds = userGroups
-          .filter(g => g.parentGroupId)
-          .map(g => g.parentGroupId);
+          // Find all subgroups of those root groups
+          const subgroups = await Group.find({
+            parentGroupId: { $in: rootGroupIds }
+          }).select('_id');
 
-        const allGroupIds = [...new Set([...groupIds, ...parentGroupIds])];
-        groupQuery = groupQuery.where('_id').in(allGroupIds);
+          const subgroupIds = subgroups.map(g => g._id);
+
+          // Combine root groups and their subgroups
+          const allGroupIds = [...rootGroupIds, ...subgroupIds];
+          groupQuery = groupQuery.where('_id').in(allGroupIds);
+        } else {
+          // For team_lead and other roles: see only groups where they are members
+          const userGroups = await Group.find({
+            'members.userId': req.user.id
+          }).select('_id parentGroupId');
+
+          const groupIds = userGroups.map(g => g._id);
+
+          // Also include parent groups of subgroups the user is a member of
+          const parentGroupIds = userGroups
+            .filter(g => g.parentGroupId)
+            .map(g => g.parentGroupId);
+
+          const allGroupIds = [...new Set([...groupIds, ...parentGroupIds])];
+          groupQuery = groupQuery.where('_id').in(allGroupIds);
+        }
       }
 
       const groups = await groupQuery
