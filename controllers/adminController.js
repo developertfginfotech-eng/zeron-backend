@@ -3858,8 +3858,28 @@ async createProperty(req, res) {
           // Combine root groups and their subgroups
           const allGroupIds = [...rootGroupIds, ...subgroupIds];
           groupQuery = groupQuery.where('_id').in(allGroupIds);
+        } else if (admin.role === 'team_lead') {
+          // For team_lead: see groups where they are team lead OR member
+          const teamLeadGroups = await Group.find({
+            teamLeadId: req.user.id
+          }).select('_id parentGroupId');
+
+          const memberGroups = await Group.find({
+            'members.userId': req.user.id
+          }).select('_id parentGroupId');
+
+          const allUserGroups = [...teamLeadGroups, ...memberGroups];
+          const groupIds = allUserGroups.map(g => g._id);
+
+          // Also include parent groups of subgroups
+          const parentGroupIds = allUserGroups
+            .filter(g => g.parentGroupId)
+            .map(g => g.parentGroupId);
+
+          const allGroupIds = [...new Set([...groupIds, ...parentGroupIds])];
+          groupQuery = groupQuery.where('_id').in(allGroupIds);
         } else {
-          // For team_lead and other roles: see only groups where they are members
+          // For other roles: see only groups where they are members
           const userGroups = await Group.find({
             'members.userId': req.user.id
           }).select('_id parentGroupId');
