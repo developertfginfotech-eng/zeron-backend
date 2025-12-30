@@ -3996,7 +3996,9 @@ async createProperty(req, res) {
         defaultRole: defaultRole || null,
         createdBy: req.user.id,
         parentGroupId: parentGroupId || null,
-        overriddenPermissions: overriddenPermissions || []
+        overriddenPermissions: overriddenPermissions || [],
+        groupAdminId: groupAdminId || null,
+        teamLeadId: teamLeadId || null
       });
 
       // If groupAdminId is provided (root group), add the admin to the group with all permissions
