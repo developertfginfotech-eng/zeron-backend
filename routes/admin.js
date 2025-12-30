@@ -209,13 +209,16 @@ router.delete('/properties/:id', async (req, res, next) => {
     return next();
   }
 
-  // Check if user has delete permission from either 'properties' or 'properties:manage' resource
-  const User = require('../models/User');
-  const user = await User.findById(req.user.id).populate('groups');
+  // Check if user has delete permission from groups (not from assigned role)
+  const Group = require('../models/Group');
+  const groupPermissions = await Group.getUserPermissions(req.user.id);
 
-  const hasPermission =
-    (await user.hasPermission('properties', 'delete')) ||
-    (await user.hasPermission('properties:manage', 'delete'));
+  const hasPermission = groupPermissions.some(perm =>
+    (perm.resource === 'properties' ||
+     perm.resource === 'properties:manage' ||
+     perm.resource === 'operations:properties') &&
+    perm.actions.includes('delete')
+  );
 
   if (hasPermission) {
     return next();
@@ -224,7 +227,7 @@ router.delete('/properties/:id', async (req, res, next) => {
   return res.status(403).json({
     success: false,
     message: "You don't have permission to delete properties",
-    required: { resources: ['properties', 'properties:manage'], action: 'delete' }
+    required: { resources: ['properties', 'properties:manage', 'operations:properties'], action: 'delete' }
   });
 }, adminController.deleteProperty);
 
