@@ -257,6 +257,25 @@ class AdminController {
       const { status, rejectionReasons, reviewNotes } = req.body;
       const adminId = req.user.id;
 
+      // Check permissions based on action
+      const requiredAction = status === 'approved' ? 'approve' : status === 'rejected' ? 'reject' : 'view';
+      const requiredResource = 'kyc:verification';
+
+      // Get user's permissions from their groups
+      const userPermissions = await Group.getUserPermissions(adminId);
+      const hasPermission = userPermissions.some(perm =>
+        perm.resource === requiredResource && perm.actions.includes(requiredAction)
+      );
+
+      // Super admins bypass permission checks
+      const admin = await User.findById(adminId);
+      if (admin.role !== 'super_admin' && !hasPermission) {
+        return res.status(403).json({
+          success: false,
+          message: `You don't have permission to ${requiredAction} KYC documents. Required: ${requiredAction} action on ${requiredResource}`,
+        });
+      }
+
       // Find and update user
       const user = await User.findById(id);
       if (!user) {
@@ -2160,6 +2179,25 @@ async createProperty(req, res) {
       const { id } = req.params;
       const { status, rejectionReasons, reviewNotes } = req.body;
       const adminId = req.user.id;
+
+      // Check permissions based on action
+      const requiredAction = status === 'approved' ? 'approve' : status === 'rejected' ? 'reject' : 'view';
+      const requiredResource = 'kyc:verification';
+
+      // Get user's permissions from their groups
+      const userPermissions = await Group.getUserPermissions(adminId);
+      const hasPermission = userPermissions.some(perm =>
+        perm.resource === requiredResource && perm.actions.includes(requiredAction)
+      );
+
+      // Super admins bypass permission checks
+      const admin = await User.findById(adminId);
+      if (admin.role !== 'super_admin' && !hasPermission) {
+        return res.status(403).json({
+          success: false,
+          message: `You don't have permission to ${requiredAction} KYC documents. Required: ${requiredAction} action on ${requiredResource}`,
+        });
+      }
 
       // Find and update user
       const user = await User.findById(id);
