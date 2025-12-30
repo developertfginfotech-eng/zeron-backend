@@ -228,6 +228,18 @@ const groupSchema = new mongoose.Schema({
     ref: 'Group',
     default: null
   },
+  // Group admin for root groups
+  groupAdminId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  // Team lead for sub-groups
+  teamLeadId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   // Overridden permissions for sub-groups (inherits parent if not specified)
   overriddenPermissions: [{
     resource: {
