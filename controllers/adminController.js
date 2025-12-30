@@ -4120,7 +4120,7 @@ async createProperty(req, res) {
   async addUserToGroup(req, res) {
     try {
       const { groupId } = req.params;
-      const { userId, memberPermissions } = req.body;
+      const { userId, memberPermissions, role } = req.body;
 
       const user = await User.findById(userId);
       const group = await Group.findById(groupId);
