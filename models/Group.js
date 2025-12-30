@@ -59,7 +59,6 @@ const groupSchema = new mongoose.Schema({
 
         // Operations Department
         'operations',
-        'operations:properties',
         'operations:transactions',
         'operations:support',
         'operations:maintenance',
@@ -146,7 +145,6 @@ const groupSchema = new mongoose.Schema({
 
           // Operations Department
           'operations',
-          'operations:properties',
           'operations:transactions',
           'operations:support',
           'operations:maintenance',
@@ -259,7 +257,6 @@ const groupSchema = new mongoose.Schema({
         'compliance:approvals',
         'compliance:policies',
         'operations',
-        'operations:properties',
         'operations:transactions',
         'operations:support',
         'operations:maintenance',
