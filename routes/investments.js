@@ -541,7 +541,7 @@ router.put('/settings/:id', authenticate, async (req, res) => {
 // Withdraw investment (bond-break or normal withdrawal)
 router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
   try {
-    const investment = await Investment.findById(req.params.id).populate('property', 'title');
+    const investment = await Investment.findById(req.params.id).populate('property', 'title managementFees');
 
     if (!investment) {
       return res.status(404).json({
