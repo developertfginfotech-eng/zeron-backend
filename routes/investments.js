@@ -632,8 +632,15 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
         actualPenaltyRate = penaltyTier ? penaltyTier.penaltyPercentage : (penaltyRate || 0);
       }
 
-      penalty = principalAmount * (actualPenaltyRate / 100);
-      withdrawalAmount = principalAmount + totalRentalYield - penalty;
+      // Calculate pre-maturity exit fee on total value (principal + returns)
+      const totalValueBeforeWithdrawal = principalAmount + totalRentalYield;
+      penalty = totalValueBeforeWithdrawal * (actualPenaltyRate / 100);
+
+      // Calculate management fees if applicable
+      const managementFeePercentage = investment.managementFee?.feePercentage || property.managementFees?.percentage || 0;
+      const managementFeeAmount = managementFeePercentage > 0 ? (totalValueBeforeWithdrawal * managementFeePercentage) / 100 : 0;
+
+      withdrawalAmount = totalValueBeforeWithdrawal - penalty - managementFeeAmount;
 
     } else {
       // AFTER MATURITY

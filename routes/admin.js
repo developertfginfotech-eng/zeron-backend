@@ -38,9 +38,33 @@ router.get('/security-settings', adminController.getSecuritySettings);
 // Apply authentication to all admin routes
 router.use(authenticate);
 
-// ========== SUPER ADMIN ONLY - ADMIN CREATION ==========
-// Register new admin (super admin only - creates new admin users)
-router.post('/admin-users', requireSuperAdmin, [
+// ========== ADMIN CREATION - Super Admin or users with users:create permission ==========
+// Register new admin (super admin or users with users:create permission)
+router.post('/admin-users', async (req, res, next) => {
+  // Super admin always has access
+  if (req.user?.role === 'super_admin') {
+    return next();
+  }
+
+  // Check if user has users:create permission from groups
+  const Group = require('../models/Group');
+  const groupPermissions = await Group.getUserPermissions(req.user.id);
+
+  const hasPermission = groupPermissions.some(perm =>
+    (perm.resource === 'users' || perm.resource === 'users:create') &&
+    perm.actions.includes('create')
+  );
+
+  if (hasPermission) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: "You don't have permission to create admin users. Required: users:create permission",
+    required: { resources: ['users', 'users:create'], action: 'create' }
+  });
+}, [
   body('firstName').trim().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
   body('lastName').trim().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
   body('email').isEmail().withMessage('Valid email required'),
@@ -85,14 +109,31 @@ router.post('/admin-users/verify-role-change-otp', authenticate, [
 
 // ========== ADMIN USER MANAGEMENT ROUTES ==========
 
-// Get all admin users - allow super_admin, admin, and team_lead
-router.get('/admin-users', (req, res, next) => {
+// Get all admin users - allow super_admin, admin, team_lead, or users with users:view permission
+router.get('/admin-users', async (req, res, next) => {
+  // Super admin, admin, and team_lead have automatic access
   if (['super_admin', 'admin', 'team_lead'].includes(req.user?.role)) {
     return next();
   }
+
+  // Check if user has users:view permission from groups
+  const Group = require('../models/Group');
+  const groupPermissions = await Group.getUserPermissions(req.user.id);
+
+  const hasPermission = groupPermissions.some(perm =>
+    (perm.resource === 'users' ||
+     perm.resource === 'users:create' ||
+     perm.resource === 'users:edit') &&
+    perm.actions.includes('view')
+  );
+
+  if (hasPermission) {
+    return next();
+  }
+
   return res.status(403).json({
     success: false,
-    message: 'Super admin access required'
+    message: 'You do not have permission to view admin users'
   });
 }, adminController.getAdminUsers);
 

@@ -169,6 +169,7 @@ function calculateWithdrawalAmount(investment, property, withdrawalDate = new Da
 
   let penaltyAmount = 0;
   if (penaltyInfo.isInLockInPeriod && penaltyInfo.penaltyPercentage > 0) {
+    // Pre-maturity exit fee applies to total amount (principal + returns)
     penaltyAmount = (returns.totalValue * penaltyInfo.penaltyPercentage) / 100;
   }
 
