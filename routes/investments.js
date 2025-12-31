@@ -891,6 +891,15 @@ router.get('/:id/returns', authenticate, async (req, res) => {
     const { calculateWithdrawalAmount } = require('../utils/investment-calculations');
     const withdrawalDetails = calculateWithdrawalAmount(investment, investment.property);
 
+    // Debug logging
+    console.log('=== WITHDRAWAL CALCULATION DEBUG ===');
+    console.log('Investment Amount:', investment.amount);
+    console.log('Investment managementFee:', investment.managementFee);
+    console.log('Property managementFees:', investment.property?.managementFees);
+    console.log('Property investmentTerms:', investment.property?.investmentTerms);
+    console.log('Withdrawal Details:', JSON.stringify(withdrawalDetails, null, 2));
+    console.log('=== END DEBUG ===');
+
     res.json({
       success: true,
       data: withdrawalDetails
