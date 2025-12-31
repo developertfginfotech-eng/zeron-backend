@@ -799,6 +799,74 @@ router.get('/withdrawal-requests', authenticate, async (req, res) => {
   }
 });
 
+// Cancel withdrawal request and revert investment to active
+router.post('/:id/cancel-withdrawal', authenticate, async (req, res) => {
+  try {
+    const investment = await Investment.findById(req.params.id);
+
+    if (!investment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Investment not found'
+      });
+    }
+
+    // Verify ownership
+    if (investment.user.toString() !== req.user.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to cancel this withdrawal'
+      });
+    }
+
+    // Check if investment is in cancelled status (withdrawal pending)
+    if (investment.status !== 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Investment does not have a pending withdrawal'
+      });
+    }
+
+    // Find and cancel the pending withdrawal request
+    const WithdrawalRequest = require('../models/WithdrawalRequest');
+    const withdrawalRequest = await WithdrawalRequest.findOne({
+      investmentId: investment._id,
+      status: 'pending'
+    });
+
+    if (withdrawalRequest) {
+      withdrawalRequest.status = 'cancelled';
+      withdrawalRequest.cancelledAt = new Date();
+      withdrawalRequest.cancelledBy = req.user.id;
+      await withdrawalRequest.save();
+    }
+
+    // Revert investment status back to confirmed (active)
+    investment.status = 'confirmed';
+    investment.exitDate = null;
+    await investment.save();
+
+    logger.info(`Withdrawal cancelled: User ${req.user.id}, Investment ${investment._id}`);
+
+    res.json({
+      success: true,
+      message: 'Withdrawal request cancelled successfully. Your investment is now active again.',
+      data: {
+        investmentId: investment._id,
+        status: investment.status
+      }
+    });
+
+  } catch (error) {
+    logger.error('Cancel withdrawal error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error cancelling withdrawal',
+      error: error.message
+    });
+  }
+});
+
 // Get investment returns and withdrawal details (for withdrawal dialog)
 router.get('/:id/returns', authenticate, async (req, res) => {
   try {
