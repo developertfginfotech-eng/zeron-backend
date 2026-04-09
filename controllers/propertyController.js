@@ -95,11 +95,17 @@ class PropertyController {
     }
 
     await Property.findByIdAndUpdate(id, { $inc: { 'analytics.views': 1 } });
-    console.log('Views incremented for property');
+
+    // Compute totalInvested from sold shares (covers existing data before field was added)
+    const soldShares = (property.financials?.totalShares || 0) - (property.financials?.availableShares || 0);
+    const computedTotalInvested = soldShares * (property.financials?.pricePerShare || 0);
 
     res.json({
       success: true,
-      data: property
+      data: {
+        ...property,
+        totalInvested: computedTotalInvested
+      }
     });
 
   } catch (error) {

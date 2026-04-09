@@ -1734,9 +1734,12 @@ async createProperty(req, res) {
         });
       }
 
+      const soldShares = (property.financials?.totalShares || 0) - (property.financials?.availableShares || 0);
+      const computedTotalInvested = soldShares * (property.financials?.pricePerShare || 0);
+
       res.json({
         success: true,
-        data: property,
+        data: { ...property, totalInvested: computedTotalInvested },
       });
     } catch (error) {
       console.error("Get property by ID error:", error);
@@ -2400,9 +2403,12 @@ async createProperty(req, res) {
         });
       }
 
+      const soldShares = (property.financials?.totalShares || 0) - (property.financials?.availableShares || 0);
+      const computedTotalInvested = soldShares * (property.financials?.pricePerShare || 0);
+
       res.json({
         success: true,
-        data: property,
+        data: { ...property, totalInvested: computedTotalInvested },
       });
     } catch (error) {
       console.error("Get property by ID error:", error);
