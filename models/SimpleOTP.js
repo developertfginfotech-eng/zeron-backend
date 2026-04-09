@@ -1,4 +1,3 @@
-// backend/models/SimpleOTP.js
 const mongoose = require('mongoose');
 
 const simpleOTPSchema = new mongoose.Schema({
@@ -18,7 +17,7 @@ const simpleOTPSchema = new mongoose.Schema({
   },
   propertyId: {
     type: mongoose.Schema.Types.ObjectId,
-    required: false // Only for update/delete
+    required: false
   },
   requestedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -51,7 +50,6 @@ simpleOTPSchema.methods.isValid = function(inputOTP) {
   return this.otp === inputOTP;
 };
 
-// Mark as used
 simpleOTPSchema.methods.markUsed = function() {
   this.status = 'used';
   return this.save();

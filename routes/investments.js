@@ -580,14 +580,7 @@ router.post('/:id/bond-break-withdraw', authenticate, async (req, res) => {
     // Calculate holding period in years
     const holdingPeriodMs = now - investmentDate;
 
-    // ==================== TEST MODE (REMOVE BEFORE PRODUCTION) ====================
-    // Accelerated time for testing: 1 hour = 1 year
-    // Comment out this line to use real time
-    const holdingPeriodYears = holdingPeriodMs / (60 * 60 * 1000); // 1 hour = 1 year
-
-    // Real time calculation (uncomment for production):
-    // const holdingPeriodYears = holdingPeriodMs / (365 * 24 * 60 * 60 * 1000);
-    // ==================== END TEST MODE ====================
+    const holdingPeriodYears = holdingPeriodMs / (60 * 60 * 1000); // 1 hour = 1 year (test mode)
 
     // Check if withdrawal is before maturity
     const isEarlyWithdrawal = maturityDate && now < maturityDate;

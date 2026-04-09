@@ -67,7 +67,7 @@ class PropertyController {
     console.log('User from middleware:', user);
 
     const property = await Property.findById(id)
-      .select('title titleAr location images status financials analytics fundingProgress investmentTerms createdBy isActive')
+      .select('title titleAr location images status financials analytics fundingProgress investorCount totalInvested investmentTerms createdBy isActive')
       .populate('createdBy', 'firstName lastName email')
       .lean();
 
@@ -378,6 +378,7 @@ async investInProperty(req, res) {
 
       // Deduct units from property's available shares
       property.financials.availableShares -= requestedUnits;
+      property.totalInvested = (property.totalInvested || 0) + totalAmount;
       if (isNewInvestor) {
         property.investorCount += 1;
       }

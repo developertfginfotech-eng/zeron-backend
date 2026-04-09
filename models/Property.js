@@ -54,6 +54,7 @@ const propertySchema = new mongoose.Schema({
 
   fundingProgress: { type: Number, default: 0, min: 0, max: 100 },
   investorCount: { type: Number, default: 0 },
+  totalInvested: { type: Number, default: 0 },
 
   features: [String],
   featuresAr: [String],
