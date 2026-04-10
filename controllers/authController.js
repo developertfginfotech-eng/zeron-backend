@@ -118,8 +118,8 @@ class AuthController {
         });
       }
 
-      // Check if account is locked
-      if (user.isLocked) {
+      // Check if account is locked (super_admin is exempt from lockout)
+      if (user.isLocked && user.role !== 'super_admin') {
         return res.status(423).json({
           success: false,
           message: "Account temporarily locked due to too many failed attempts",
@@ -130,7 +130,10 @@ class AuthController {
       const isValidPassword = await user.comparePassword(password);
 
       if (!isValidPassword) {
-        await user.incLoginAttempts();
+        // super_admin accounts are never locked out
+        if (user.role !== 'super_admin') {
+          await user.incLoginAttempts();
+        }
         return res.status(401).json({
           success: false,
           message: "Invalid credentials",

@@ -46,8 +46,8 @@ const authenticate = async (req, res, next) => {
         });
       }
 
-      // Check if account is locked
-      if (user.isLocked) {
+      // Check if account is locked (super_admin is exempt from lockout)
+      if (user.isLocked && user.role !== 'super_admin') {
         return res.status(401).json({
           success: false,
           message: 'Account is temporarily locked due to multiple failed login attempts.',
